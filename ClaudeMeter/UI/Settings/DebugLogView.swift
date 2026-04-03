@@ -10,66 +10,84 @@ import SwiftUI
 
 struct DebugLogView: View {
     @ObservedObject private var logger = DebugLogger.shared
+    var onDismiss: (() -> Void)?
+    @Environment(\.dismiss) private var dismiss
 
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "HH:mm:ss.SSS"
+        f.dateFormat = "HH:mm:ss"
         return f
     }()
 
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar
-            HStack {
-                Text("\(logger.entries.count) entries")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+            headerView
 
-                Spacer()
+            if logger.entries.isEmpty {
+                emptyStateView
+            } else {
+                logList
+            }
 
-                Button("Copy All") {
-                    copyAllLogs()
+            footerView
+        }
+    }
+
+    // MARK: - Header
+    private var headerView: some View {
+        HStack {
+            Button(action: {
+                if let onDismiss = onDismiss {
+                    onDismiss()
+                } else {
+                    dismiss()
                 }
-                .font(.caption)
-                .buttonStyle(.plain)
-                .foregroundColor(.accentColor)
-
-                Button("Clear") {
-                    logger.clear()
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                    Text("Back")
                 }
-                .font(.caption)
-                .buttonStyle(.plain)
                 .foregroundColor(.accentColor)
             }
-            .padding(.horizontal)
-            .padding(.bottom, 6)
+            .buttonStyle(.plain)
 
-            // Log entries
-            if logger.entries.isEmpty {
-                Spacer()
-                Text("No log entries yet.\nRefresh to generate logs.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                Spacer()
-            } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 2) {
-                            ForEach(logger.entries) { entry in
-                                logEntryRow(entry)
-                                    .id(entry.id)
-                            }
-                        }
-                        .padding(.horizontal)
-                        .textSelection(.enabled)
-                        .background(ScrollBarHider())
+            Spacer()
+
+            Text("API Logs")
+                .font(.headline)
+
+            Spacer()
+
+            Button(action: {
+                logger.clear()
+            }) {
+                Text("Clear")
+                    .foregroundColor(.red)
+            }
+            .buttonStyle(.plain)
+            .disabled(logger.entries.isEmpty)
+        }
+        .padding(.horizontal)
+        .padding(.top, 20)
+        .padding(.bottom, 12)
+    }
+
+    // MARK: - Log List
+    private var logList: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 1) {
+                    ForEach(logger.entries) { entry in
+                        logEntryRow(entry)
+                            .id(entry.id)
                     }
-                    .scrollIndicators(.hidden)
-                    .onChange(of: logger.entries.count) { _ in
-                        if let last = logger.entries.last {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
+                }
+                .padding(.horizontal)
+            }
+            .onChange(of: logger.entries.count) {
+                if let last = logger.entries.last {
+                    withAnimation {
+                        proxy.scrollTo(last.id, anchor: .bottom)
                     }
                 }
             }
@@ -77,37 +95,82 @@ struct DebugLogView: View {
     }
 
     private func logEntryRow(_ entry: DebugLogEntry) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 4) {
-                Image(systemName: entry.category.icon)
-                    .font(.system(size: 9))
-                    .foregroundColor(colorFor(entry.category))
-                    .frame(width: 12)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: entry.category.icon)
+                .foregroundColor(colorFor(entry.category))
+                .font(.system(size: 14))
+                .frame(width: 20)
+                .padding(.top, 2)
 
-                Text(Self.timeFormatter.string(from: entry.timestamp))
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(entry.category.rawValue)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(colorFor(entry.category).opacity(0.1))
+                        .foregroundColor(colorFor(entry.category))
+                        .cornerRadius(3)
 
-                Text(entry.category.rawValue)
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(colorFor(entry.category))
-                    .frame(width: 52, alignment: .leading)
+                    Spacer()
+
+                    Text(Self.timeFormatter.string(from: entry.timestamp))
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
 
                 Text(entry.message)
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 12))
                     .foregroundColor(.primary)
-                    .lineLimit(1)
-            }
 
-            if let detail = entry.detail {
-                Text(detail)
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .lineLimit(3)
-                    .padding(.leading, 16)
+                if let detail = entry.detail {
+                    Text(detail)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
             }
         }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .background(Color.primary.opacity(0.03))
+        .cornerRadius(6)
         .padding(.vertical, 2)
+    }
+
+    // MARK: - Empty State
+    private var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "list.bullet.rectangle.portrait")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary.opacity(0.5))
+            Text("No logs yet")
+                .font(.headline)
+                .foregroundColor(.secondary)
+            Text("API fetch calls will appear here")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+    }
+
+    // MARK: - Footer
+    private var footerView: some View {
+        HStack {
+            Text("\(logger.entries.count) entries")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+            Spacer()
+            Button("Copy All") {
+                copyAllLogs()
+            }
+            .font(.system(size: 10))
+            .buttonStyle(.plain)
+            .foregroundColor(.accentColor)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color.primary.opacity(0.05))
     }
 
     private func colorFor(_ category: DebugLogEntry.Category) -> Color {
@@ -135,3 +198,4 @@ struct DebugLogView: View {
         NSPasteboard.general.setString(text, forType: .string)
     }
 }
+

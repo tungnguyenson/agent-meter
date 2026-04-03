@@ -53,7 +53,7 @@ enum Constants {
     enum Polling {
         static let defaultInterval: TimeInterval = 30
         static let minInterval: TimeInterval = 30
-        static let maxInterval: TimeInterval = 300
+        static let maxInterval: TimeInterval = 3600
         static let backgroundInterval: TimeInterval = 900  // 15 minutes
 
         // Adaptive polling thresholds
@@ -75,6 +75,14 @@ enum Constants {
         static let maxAge: TimeInterval = 3600 * 24  // 24 hours
         static let version = 1
     }
+
+    // MARK: - Logging Configuration
+    enum Logging {
+        static let directoryName = "ClaudeMeter/Logs"
+        static let filename = "api_logs.json"
+        static let maxEntries = 100
+    }
+
 
     // MARK: - Notification Configuration
     enum Notification {
@@ -118,7 +126,7 @@ enum Constants {
 
         // Validation bounds
         static let minRefreshInterval = 30
-        static let maxRefreshInterval = 600
+        static let maxRefreshInterval = 3600
 
         // Defaults
         static let defaultRefreshInterval = 30

@@ -83,9 +83,16 @@ extension Date {
 
     /// Relative time description (e.g., "2 minutes ago", "in 5 hours")
     var relativeDescription: String {
+        let now = Date()
+        let diff = self.timeIntervalSince(now)
+
+        if abs(diff) <= 1 {
+            return "just now"
+        }
+
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: self, relativeTo: Date())
+        return formatter.localizedString(for: self, relativeTo: now)
     }
 
     /// Start of the current day

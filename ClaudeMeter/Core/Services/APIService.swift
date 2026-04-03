@@ -129,14 +129,16 @@ class APIService: APIServiceProtocol {
                 // The API returns ISO 8601 dates with fractional seconds
                 // (e.g. "2026-02-19T07:00:00.125129+00:00") which the built-in
                 // .iso8601 strategy does NOT support. Use a custom formatter.
-                let isoFormatter = ISO8601DateFormatter()
-                isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                 decoder.dateDecodingStrategy = .custom { decoder in
                     let container = try decoder.singleValueContainer()
                     let dateString = try container.decode(String.self)
+
+                    let isoFormatter = ISO8601DateFormatter()
+                    isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                     if let date = isoFormatter.date(from: dateString) {
                         return date
                     }
+
                     // Fallback: try without fractional seconds
                     let fallbackFormatter = ISO8601DateFormatter()
                     fallbackFormatter.formatOptions = [.withInternetDateTime]
@@ -243,14 +245,16 @@ class APIService: APIServiceProtocol {
         case 200:
             do {
                 let decoder = JSONDecoder()
-                let isoFormatter = ISO8601DateFormatter()
-                isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                 decoder.dateDecodingStrategy = .custom { decoder in
                     let container = try decoder.singleValueContainer()
                     let dateString = try container.decode(String.self)
+
+                    let isoFormatter = ISO8601DateFormatter()
+                    isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                     if let date = isoFormatter.date(from: dateString) {
                         return date
                     }
+
                     let fallbackFormatter = ISO8601DateFormatter()
                     fallbackFormatter.formatOptions = [.withInternetDateTime]
                     if let date = fallbackFormatter.date(from: dateString) {

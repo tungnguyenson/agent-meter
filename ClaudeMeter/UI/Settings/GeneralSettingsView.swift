@@ -57,6 +57,9 @@ struct GeneralSettingsView: View {
                         Text("1 Minute").tag(60)
                         Text("2 Minutes").tag(120)
                         Text("5 Minutes").tag(300)
+                        Text("15 Minutes").tag(900)
+                        Text("30 Minutes").tag(1800)
+                        Text("1 Hour").tag(3600)
                     }
                     .accessibilityLabel("Refresh Interval")
                     .accessibilityHint("Choose how often to update usage data")

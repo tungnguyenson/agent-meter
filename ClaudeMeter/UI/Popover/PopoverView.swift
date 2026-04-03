@@ -11,6 +11,7 @@ import SwiftUI
 struct PopoverView: View {
     @ObservedObject var appState: AppState
     @State private var showingSettings = false
+    @State private var showingLogs = false
     @State private var isRefreshDisabled = false
 
     // Size constants
@@ -40,7 +41,7 @@ struct PopoverView: View {
                     .padding(.horizontal, contentPadding)
                     .padding(.vertical, 10)
             }
-            .opacity(showingSettings ? 0 : 1)
+            .opacity(showingSettings || showingLogs ? 0 : 1)
 
             // Settings - full page (not overlay)
             if showingSettings {
@@ -51,11 +52,22 @@ struct PopoverView: View {
                 })
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
+
+            // Logs - full page
+            if showingLogs {
+                DebugLogView(onDismiss: {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showingLogs = false
+                    }
+                })
+                .transition(AnyTransition.move(edge: .trailing).combined(with: .opacity))
+            }
         }
         .frame(width: popoverWidth, height: popoverHeight)
         .background(.ultraThinMaterial)
         .preferredColorScheme(appState.settings.colorScheme.colorScheme)
         .animation(.easeInOut(duration: 0.25), value: showingSettings)
+        .animation(.easeInOut(duration: 0.25), value: showingLogs)
     }
 
     // MARK: - Content
@@ -103,6 +115,18 @@ struct PopoverView: View {
             .help("Refresh usage data")
             .accessibilityLabel("Refresh")
             .accessibilityHint("Double tap to refresh usage data")
+
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showingLogs = true
+                }
+            }) {
+                Image(systemName: "list.bullet.rectangle.portrait")
+            }
+            .buttonStyle(.plain)
+            .help("View API logs")
+            .accessibilityLabel("View Logs")
+            .accessibilityHint("Double tap to view API logs")
 
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -278,7 +302,9 @@ struct PopoverView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             } else if let lastUpdate = appState.lastUpdateTime {
-                Text("Updated \(lastUpdate.relativeDescription)")
+                let nextUpdate = lastUpdate.addingTimeInterval(TimeInterval(appState.settings.refreshInterval))
+                let timeString = DateFormatter.localizedString(from: nextUpdate, dateStyle: .none, timeStyle: .short)
+                Text("Updated \(lastUpdate.relativeDescription). Next update: \(timeString)")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }

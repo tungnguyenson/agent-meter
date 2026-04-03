@@ -71,16 +71,27 @@ class PollingManager {
 
     // MARK: - Public Methods
 
-    func start(onTick: @escaping () async -> Void) {
+    func start(immediateRefresh: Bool = true, onTick: @escaping () async -> Void) {
         self.onTick = onTick
         state = .running
         scheduleTimer(interval: currentInterval)
 
-        // Trigger immediate fetch (performRefresh handles its own fetch guard)
-        Task {
-            guard canMakeRequest(reason: "start") else { return }
-            await onTick()
+        // Trigger immediate fetch only if requested (e.g. skip if cached data is still fresh)
+        if immediateRefresh {
+            Task {
+                guard canMakeRequest(reason: "start") else { return }
+                await onTick()
+            }
         }
+    }
+
+    /// Resume from background state without triggering an immediate fetch.
+    /// Use this when coming to foreground but data is still fresh.
+    func resumeFromBackground() {
+        guard state == .background else { return }
+        state = .running
+        let newInterval = calculateInterval(for: lastUsage)
+        scheduleTimer(interval: newInterval)
     }
 
     func stop() {
@@ -149,7 +160,7 @@ class PollingManager {
     /// Set default interval from settings
     func setDefaultInterval(_ interval: TimeInterval) {
         config.defaultInterval = max(config.minInterval, min(interval, config.maxInterval))
-        if state == .running && lastUsage < config.highUsageThreshold {
+        if state == .running {
             scheduleTimer(interval: config.defaultInterval)
         }
     }
@@ -309,27 +320,15 @@ class PollingManager {
     /// Check if data is stale enough to warrant a new request
     func isDataStale(lastUpdateTime: Date?) -> Bool {
         guard let lastUpdate = lastUpdateTime else { return true }
-        return Date().timeIntervalSince(lastUpdate) > Constants.RateLimit.stalenessThreshold
+        return Date().timeIntervalSince(lastUpdate) >= currentInterval
     }
 
     // MARK: - Private Methods
 
     /// Calculate optimal polling interval based on current usage
-    /// Higher usage = more frequent polling to catch limit resets
     func calculateInterval(for usage: Double) -> TimeInterval {
-        if usage >= config.criticalUsageThreshold {
-            // Critical: poll every 30 seconds
-            return config.minInterval
-        } else if usage >= config.highUsageThreshold {
-            // High: poll every 45 seconds
-            return (config.minInterval + config.defaultInterval) / 2
-        } else if usage >= 50 {
-            // Medium: use default interval
-            return config.defaultInterval
-        } else {
-            // Low usage: can poll less frequently
-            return min(config.defaultInterval * 1.5, config.maxInterval)
-        }
+        // Always use the default interval from app settings (as requested)
+        return config.defaultInterval
     }
 
     private func scheduleTimer(interval: TimeInterval) {

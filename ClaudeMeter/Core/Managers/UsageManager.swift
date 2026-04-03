@@ -75,7 +75,9 @@ class UsageManager: ObservableObject {
             }
 
             // 2. Fetch Data with retry
+            DebugLogger.shared.log(.request, "API: fetchUsage")
             let data = try await apiService.fetchUsageWithRetry(token: credentials.accessToken)
+            DebugLogger.shared.log(.response, "API: fetchUsage SUCCESS")
 
             // 3. Update State
             self.usageData = data
@@ -95,26 +97,26 @@ class UsageManager: ObservableObject {
                 return
             }
 
+            DebugLogger.shared.log(.error, "API: fetchUsage FAILED", detail: error.localizedDescription)
             self.error = AppError.from(error)
             print("UsageManager: API error - \(error)")
-
-            // Try to use cached data on error
             loadCachedData()
 
         } catch let error as KeychainError {
+            DebugLogger.shared.log(.error, "API: fetchUsage FAILED", detail: error.localizedDescription)
             self.error = AppError.from(error)
             print("UsageManager: Keychain error - \(error)")
 
         } catch let error as AppError {
+            DebugLogger.shared.log(.error, "API: fetchUsage FAILED", detail: error.localizedDescription)
             self.error = error
             print("UsageManager: App error - \(error)")
-
-            // Try to use cached data on error
             if error.shouldRetry {
                 loadCachedData()
             }
 
         } catch {
+            DebugLogger.shared.log(.error, "API: fetchUsage FAILED", detail: error.localizedDescription)
             self.error = AppError.unknown(error.localizedDescription)
             print("UsageManager: Unknown error - \(error)")
         }
@@ -129,13 +131,16 @@ class UsageManager: ObservableObject {
             return nil
         }
         do {
+            DebugLogger.shared.log(.fallback, "API: fetchUsageFromWeb")
             let (data, refreshedKey) = try await apiService.fetchUsageFromWeb(sessionKey: webSessionKey, organizationId: webOrganizationId)
             if let refreshedKey = refreshedKey {
                 self.webSessionKey = refreshedKey
                 onSessionKeyRefreshed?(refreshedKey)
             }
+            DebugLogger.shared.log(.response, "API: fetchUsageFromWeb SUCCESS")
             return data
         } catch {
+            DebugLogger.shared.log(.error, "API: fetchUsageFromWeb FAILED", detail: error.localizedDescription)
             print("UsageManager: Web API fallback failed - \(error)")
             return nil
         }

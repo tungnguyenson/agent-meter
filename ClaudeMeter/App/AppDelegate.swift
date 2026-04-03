@@ -72,7 +72,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.appState?.onAppBecameActive()
+            Task { @MainActor in
+                self?.appState?.onAppBecameActive()
+            }
         }
 
         // App resigned active (background)
@@ -81,7 +83,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.appState?.onAppResignedActive()
+            Task { @MainActor in
+                self?.appState?.onAppResignedActive()
+            }
         }
 
         // System will sleep
@@ -90,7 +94,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.appState?.onSystemWillSleep()
+            Task { @MainActor in
+                self?.appState?.onSystemWillSleep()
+            }
         }
 
         // System did wake
@@ -99,7 +105,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.appState?.onSystemDidWake()
+            Task { @MainActor in
+                self?.appState?.onSystemDidWake()
+            }
         }
     }
 

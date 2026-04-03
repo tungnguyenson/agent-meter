@@ -54,6 +54,12 @@ class AppState: ObservableObject {
         setupBindings()
         applySettings()
 
+        // Restore lastUpdateTime from the on-disk cache timestamp so we know
+        // how old the data is without making an API call.
+        if let cacheAge = CacheManager.shared.cacheAge {
+            lastUpdateTime = Date().addingTimeInterval(-cacheAge)
+        }
+
         // Setup network monitor for wake recovery
         pollingManager.startNetworkMonitor { [weak self] in
             Task { @MainActor in
@@ -61,10 +67,12 @@ class AppState: ObservableObject {
             }
         }
 
-        // PHASE 2: Deferred polling (300ms delay to let UI render first)
+        // PHASE 2: Deferred polling (300ms delay to let UI render first).
+        // Skip the immediate fetch when cached data is still within the refresh interval.
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
-            self?.pollingManager.start { [weak self] in
+            guard let self = self else { return }
+            self.pollingManager.start(immediateRefresh: !self.isDataFresh()) { [weak self] in
                 await self?.performRefresh()
             }
         }
@@ -181,7 +189,20 @@ class AppState: ObservableObject {
     // MARK: - App Lifecycle
 
     func onAppBecameActive() {
-        pollingManager.onAppBecameActive()
+        // Only fire an immediate API call if the data is actually stale.
+        // If the cached data is still within the refresh interval, just resume
+        // the polling timer without an extra round-trip.
+        if isDataFresh() {
+            pollingManager.resumeFromBackground()
+        } else {
+            pollingManager.onAppBecameActive()
+        }
+    }
+
+    /// Returns true when the last successful fetch is more recent than the configured refresh interval.
+    private func isDataFresh() -> Bool {
+        guard let lastUpdate = lastUpdateTime else { return false }
+        return Date().timeIntervalSince(lastUpdate) < TimeInterval(settings.refreshInterval)
     }
 
     func onAppResignedActive() {
