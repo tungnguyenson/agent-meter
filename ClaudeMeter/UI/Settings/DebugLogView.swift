@@ -74,23 +74,13 @@ struct DebugLogView: View {
 
     // MARK: - Log List
     private var logList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 1) {
-                    ForEach(logger.entries) { entry in
-                        logEntryRow(entry)
-                            .id(entry.id)
-                    }
-                }
-                .padding(.horizontal)
-            }
-            .onChange(of: logger.entries.count) {
-                if let last = logger.entries.last {
-                    withAnimation {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
+        ScrollView {
+            LazyVStack(spacing: 1) {
+                ForEach(logger.entries.reversed()) { entry in
+                    logEntryRow(entry)
                 }
             }
+            .padding(.horizontal)
         }
     }
 

@@ -11,7 +11,8 @@ import SwiftUI
 // MARK: - About View
 struct AboutView: View {
     private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-    private let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    private let buildNumber = "2"
+    // private let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "2"
 
     var body: some View {
         SettingsTabContainer {

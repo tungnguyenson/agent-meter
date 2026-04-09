@@ -80,7 +80,7 @@ enum Constants {
     enum Logging {
         static let directoryName = "ClaudeMeter/Logs"
         static let filename = "api_logs.json"
-        static let maxEntries = 100
+        static let maxEntries = 50
     }
 
 

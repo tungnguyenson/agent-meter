@@ -335,7 +335,10 @@ class PollingManager {
         timer?.invalidate()
         currentInterval = interval
 
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        // Use Timer(timeInterval:...) + RunLoop.main.add instead of scheduledTimer
+        // to avoid double-registration: scheduledTimer adds to .default mode, and
+        // then add(_:forMode:.common) would add it again (common includes .default).
+        let newTimer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task {
                 guard let self = self else { return }
                 guard self.canMakeRequest(reason: "timer") else { return }
@@ -343,11 +346,8 @@ class PollingManager {
                 await self.onTick?()
             }
         }
-
-        // Ensure timer runs on common run loop mode
-        if let timer = timer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
+        timer = newTimer
+        RunLoop.main.add(newTimer, forMode: .common)
     }
 }
 

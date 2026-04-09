@@ -162,7 +162,6 @@ private func fsEventsCallback(
     }
 
     // Check if any relevant files changed
-    let relevantExtensions = Constants.FileWatcher.relevantExtensions
     let relevantFiles = Constants.FileWatcher.relevantFiles
 
     var hasRelevantChange = false
@@ -176,12 +175,11 @@ private func fsEventsCallback(
             continue
         }
 
-        // Check if it's a relevant file
+        // Only react to credential/settings files, not project data files.
+        // Claude Code writes many JSON files to ~/.claude/projects/ during normal
+        // operation; matching on extension alone would trigger on all of them.
         let fileName = (path as NSString).lastPathComponent.lowercased()
-        let fileExtension = (path as NSString).pathExtension.lowercased()
-
-        if relevantExtensions.contains(fileExtension) ||
-           relevantFiles.contains(where: { fileName.contains($0) }) {
+        if relevantFiles.contains(where: { fileName.contains($0) }) {
             hasRelevantChange = true
             break
         }
