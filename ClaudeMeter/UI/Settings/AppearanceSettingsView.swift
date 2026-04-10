@@ -22,6 +22,15 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     .pickerStyle(.radioGroup)
+
+                    if appState.settings.displayMode == .detailed {
+                        Picker("Detailed Label", selection: $appState.settings.detailedModeStyle) {
+                            ForEach(DetailedModeStyle.allCases, id: \.self) { style in
+                                Text(style.rawValue).tag(style)
+                            }
+                        }
+                        .pickerStyle(.radioGroup)
+                    }
                 }
                 .background(ScrollBarHider())
 

@@ -58,26 +58,26 @@ class StatusItemController: NSObject {
         Publishers.CombineLatest(appState.$usageData, appState.$settings)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data, settings in
-                self?.updateMenuBarDisplay(with: data, mode: settings.displayMode)
+                self?.updateMenuBarDisplay(with: data, settings: settings)
             }
             .store(in: &cancellables)
     }
 
     // MARK: - Display Mode Rendering
 
-    private func updateMenuBarDisplay(with data: UsageData?, mode: DisplayMode) {
+    private func updateMenuBarDisplay(with data: UsageData?, settings: AppSettings) {
         guard let button = statusItem?.button else { return }
 
         // Use 5-hour usage for menu bar display
         let fiveHourUsage = data?.fiveHour?.utilization ?? 0
 
-        switch mode {
+        switch settings.displayMode {
         case .iconOnly:
             updateIconOnlyMode(button: button, usage: fiveHourUsage)
         case .compact:
             updateCompactMode(button: button, usage: fiveHourUsage)
         case .detailed:
-            updateDetailedMode(button: button, data: data)
+            updateDetailedMode(button: button, data: data, style: settings.detailedModeStyle)
         }
     }
 
@@ -94,8 +94,8 @@ class StatusItemController: NSObject {
         button.imagePosition = .imageLeading
     }
 
-    // MARK: - Detailed Mode (5h: XX% | 7d: YY%)
-    private func updateDetailedMode(button: NSStatusBarButton, data: UsageData?) {
+    // MARK: - Detailed Mode
+    private func updateDetailedMode(button: NSStatusBarButton, data: UsageData?, style: DetailedModeStyle) {
         button.image = nil
 
         guard let data = data else {
@@ -106,11 +106,11 @@ class StatusItemController: NSObject {
         var parts: [String] = []
 
         if let fiveHour = data.fiveHour {
-            parts.append("5h: \(Int(fiveHour.utilization))%")
+            parts.append(formatWindow(fiveHour, fixedLabel: "5h", style: style, units: .hoursMinutes))
         }
 
         if let sevenDay = data.sevenDay {
-            parts.append("7d: \(Int(sevenDay.utilization))%")
+            parts.append(formatWindow(sevenDay, fixedLabel: "7d", style: style, units: .daysHours))
         }
 
         let title = parts.isEmpty ? "No data" : parts.joined(separator: " | ")
@@ -125,6 +125,60 @@ class StatusItemController: NSObject {
         ]
 
         button.attributedTitle = NSAttributedString(string: title, attributes: attributes)
+    }
+
+    // MARK: - Window Formatting
+
+    private enum CountdownUnits {
+        case hoursMinutes  // e.g. "3h 42m", "59m", "4h"
+        case daysHours     // e.g. "3d 5h", "23h", "6d"
+    }
+
+    /// Render a single window as "<label>: <pct>%".
+    /// In `.fixed` style the label is the static "5h"/"7d" and pct is used%.
+    /// In `.countdown` style the label is the time-until-reset and pct is remaining%.
+    /// Falls back to the fixed label when `resetsAt` is missing or already past.
+    private func formatWindow(
+        _ window: UsageWindow,
+        fixedLabel: String,
+        style: DetailedModeStyle,
+        units: CountdownUnits
+    ) -> String {
+        switch style {
+        case .fixed:
+            return "\(fixedLabel): \(Int(window.utilization))%"
+        case .countdown:
+            guard let countdown = countdownLabel(until: window.resetsAt, units: units) else {
+                return "\(fixedLabel): \(Int(window.utilization))%"
+            }
+            let remaining = max(0, 100 - Int(window.utilization.rounded()))
+            return "\(countdown): \(remaining)%"
+        }
+    }
+
+    /// Build a collapsed countdown label from now until `resetsAt`.
+    /// Returns nil when the reset time is missing or already past.
+    private func countdownLabel(until resetsAt: Date?, units: CountdownUnits) -> String? {
+        guard let resetsAt else { return nil }
+        let remaining = resetsAt.timeIntervalSinceNow
+        guard remaining > 0 else { return nil }
+
+        switch units {
+        case .hoursMinutes:
+            let totalMinutes = Int(remaining / 60)
+            let hours = totalMinutes / 60
+            let minutes = totalMinutes % 60
+            if hours == 0 { return "\(minutes)m" }
+            if minutes == 0 { return "\(hours)h" }
+            return "\(hours)h \(minutes)m"
+        case .daysHours:
+            let totalHours = Int(remaining / 3600)
+            let days = totalHours / 24
+            let hours = totalHours % 24
+            if days == 0 { return "\(hours)h" }
+            if hours == 0 { return "\(days)d" }
+            return "\(days)d \(hours)h"
+        }
     }
 
     // MARK: - Progress Icon Creation

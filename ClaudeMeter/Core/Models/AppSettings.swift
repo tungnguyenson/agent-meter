@@ -16,6 +16,12 @@ enum DisplayMode: String, Codable, CaseIterable {
     case detailed = "Detailed"
 }
 
+// MARK: - Detailed Mode Style
+enum DetailedModeStyle: String, Codable, CaseIterable {
+    case fixed = "5h: 10% | 7d: 32%"
+    case countdown = "3h 42m: 90% | 3d 5h: 68%"
+}
+
 // MARK: - Color Scheme
 enum AppColorScheme: String, Codable, CaseIterable {
     case auto = "Auto"
@@ -35,6 +41,7 @@ enum AppColorScheme: String, Codable, CaseIterable {
 struct AppSettings: Codable, Equatable {
     // Display
     var displayMode: DisplayMode = .compact
+    var detailedModeStyle: DetailedModeStyle = .fixed
     var colorScheme: AppColorScheme = .auto
     var showInDock: Bool = false
     var showSonnetLimit: Bool = false
