@@ -72,7 +72,10 @@ class AppState: ObservableObject {
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard let self = self else { return }
-            self.pollingManager.start(immediateRefresh: !self.isDataFresh()) { [weak self] in
+            // Never fetch on app start — respect the schedule. The user can
+            // press "Refresh usage data" if they want fresh data immediately.
+            // This avoids hammering the API during rate-limit or error states.
+            self.pollingManager.start(immediateRefresh: false) { [weak self] in
                 await self?.performRefresh()
             }
         }

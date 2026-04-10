@@ -35,7 +35,7 @@ enum Constants {
     enum RateLimit {
         static let minimumRequestInterval: TimeInterval = 15
         static let defaultCooldownDuration: TimeInterval = 60
-        static let maxCooldownDuration: TimeInterval = 600
+        static let maxCooldownDuration: TimeInterval = 86400
         static let stalenessThreshold: TimeInterval = 30
         static let manualRefreshDebounce: TimeInterval = 5
     }
@@ -104,20 +104,6 @@ enum Constants {
     // MARK: - Keychain Configuration
     enum Keychain {
         static let serviceName = "Claude Code-credentials"
-    }
-
-    // MARK: - FileWatcher Configuration
-    enum FileWatcher {
-        static let debounceInterval: TimeInterval = 1.0
-        static let fsEventsLatency: CFTimeInterval = 0.5
-
-        static let configPaths: [String] = [
-            "~/.config/claude/",
-            "~/.claude/"
-        ]
-
-        static let relevantExtensions = ["json", ""]
-        static let relevantFiles = ["credentials", "settings", "config"]
     }
 
     // MARK: - App Settings

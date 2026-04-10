@@ -24,7 +24,6 @@
 		SVC001 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC008; };
 		SVC002 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC009; };
 		SVC003 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC010; };
-		SVC004 /* FileWatcherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC011; };
 		SVC005 /* DebugLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC050; };
 
 		/* Core Managers */
@@ -134,7 +133,6 @@
 		SRC008 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
 		SRC009 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		SRC010 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
-		SRC011 /* FileWatcherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileWatcherService.swift; sourceTree = "<group>"; };
 		SRC050 /* DebugLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugLogger.swift; sourceTree = "<group>"; };
 
 		/* Core Managers */
@@ -318,7 +316,6 @@
 				SRC008 /* APIService.swift */,
 				SRC009 /* KeychainService.swift */,
 				SRC010 /* NotificationService.swift */,
-				SRC011 /* FileWatcherService.swift */,
 				SRC050 /* DebugLogger.swift */,
 			);
 			path = Services;
@@ -603,7 +600,6 @@
 				SVC001 /* APIService.swift in Sources */,
 				SVC002 /* KeychainService.swift in Sources */,
 				SVC003 /* NotificationService.swift in Sources */,
-				SVC004 /* FileWatcherService.swift in Sources */,
 				SVC005 /* DebugLogger.swift in Sources */,
 				MGR001 /* UsageManager.swift in Sources */,
 				MGR002 /* PollingManager.swift in Sources */,
