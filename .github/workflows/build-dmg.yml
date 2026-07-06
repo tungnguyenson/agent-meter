@@ -1,0 +1,59 @@
+name: Build DMG
+
+# Build the distributable DMG only for the main branch. The push trigger is
+# filtered to main, so pushes to any other branch never start this workflow.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-dmg-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-dmg:
+    # Second guard: covers manual dispatch, so the DMG is never built off main.
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dmgbuild
+        run: pip install dmgbuild
+
+      - name: Resolve app version
+        id: version
+        run: |
+          VERSION=$(xcodebuild -project ClaudeMeter.xcodeproj -scheme ClaudeMeter -showBuildSettings 2>/dev/null \
+            | awk -F' = ' '$1 ~ /(^| )MARKETING_VERSION$/ { print $2; exit }')
+          VERSION="${VERSION:-1.0}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${VERSION}"
+
+      - name: Build DMG
+        env:
+          # No Apple Developer certificates in CI, so ad-hoc sign the app. It runs
+          # locally once users clear quarantine; a signed + notarized release would
+          # replace these flags with an imported cert and a notarization step.
+          XCODEBUILD_EXTRA_FLAGS: CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO CODE_SIGN_STYLE=Manual
+        run: ./scripts/create-dmg.sh "${{ steps.version.outputs.version }}"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeMeter-${{ steps.version.outputs.version }}-${{ github.sha }}
+          path: ClaudeMeter-*.dmg
+          if-no-files-found: error

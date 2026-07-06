@@ -14,11 +14,14 @@ APP_PATH="${BUILD_DIR}/Build/Products/Release/${APP_NAME}.app"
 
 echo "==> Building ${APP_NAME} v${VERSION}..."
 
+# XCODEBUILD_EXTRA_FLAGS lets CI inject extra settings (e.g. ad-hoc signing)
+# without changing local behavior; it defaults to empty.
 xcodebuild -scheme "$APP_NAME" \
   -configuration Release \
   -derivedDataPath "$BUILD_DIR" \
   clean build \
-  -quiet
+  -quiet \
+  ${XCODEBUILD_EXTRA_FLAGS:-}
 
 if [ ! -d "$APP_PATH" ]; then
   echo "ERROR: Build failed - ${APP_PATH} not found"
