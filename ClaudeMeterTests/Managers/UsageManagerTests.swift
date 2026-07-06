@@ -344,36 +344,17 @@ final class PollingManagerTests: XCTestCase {
         super.tearDown()
     }
 
-    func testCalculateInterval_LowUsage() {
-        // Given usage < 50%
-        let interval = sut.calculateInterval(for: 30)
-
-        // Then interval should be longer than default
-        XCTAssertGreaterThan(interval, Constants.Polling.defaultInterval)
-    }
-
-    func testCalculateInterval_MediumUsage() {
-        // Given usage 50-75%
-        let interval = sut.calculateInterval(for: 60)
-
-        // Then interval should be default
-        XCTAssertEqual(interval, Constants.Polling.defaultInterval)
-    }
-
-    func testCalculateInterval_HighUsage() {
-        // Given usage 75-90%
-        let interval = sut.calculateInterval(for: 80)
-
-        // Then interval should be <= default (high usage polls at or below default)
-        XCTAssertLessThanOrEqual(interval, Constants.Polling.defaultInterval)
-    }
-
-    func testCalculateInterval_CriticalUsage() {
-        // Given usage >= 90%
-        let interval = sut.calculateInterval(for: 95)
-
-        // Then interval should be minimum
-        XCTAssertEqual(interval, Constants.Polling.minInterval)
+    func testCalculateInterval_AlwaysReturnsDefaultInterval() {
+        // Adaptive polling was intentionally removed: calculateInterval returns
+        // the configured default interval for every usage level, regardless of
+        // how high usage is. See PollingManager.calculateInterval(for:).
+        for usage in [0.0, 30.0, 60.0, 80.0, 95.0, 100.0] {
+            XCTAssertEqual(
+                sut.calculateInterval(for: usage),
+                Constants.Polling.defaultInterval,
+                "Interval should be the default regardless of usage (\(usage)%)"
+            )
+        }
     }
 
     func testStart_SetsStateToRunning() {
