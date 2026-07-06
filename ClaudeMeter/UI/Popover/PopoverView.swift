@@ -299,28 +299,29 @@ struct PopoverView: View {
     // MARK: - Footer
 
     private var footerView: some View {
-        HStack {
-            if let error = appState.error {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.caption2)
-                    .foregroundColor(ColorTheme.orange)
-                Text(footerErrorText(for: error))
-                    .font(.caption2)
-                    .foregroundColor(ColorTheme.orange)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            } else if let lastUpdate = appState.lastUpdateTime {
-                let nextUpdate = lastUpdate.addingTimeInterval(TimeInterval(appState.settings.refreshInterval))
-                let timeString = DateFormatter.localizedString(from: nextUpdate, dateStyle: .none, timeStyle: .short)
-                Text("Updated \(lastUpdate.relativeDescription). Next update: \(timeString)")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+        // Re-render once per second so the relative "Updated … ago" text stays
+        // live while the popover is open (and refreshes on reopen). Without this,
+        // SwiftUI only re-invokes the body when `lastUpdateTime` changes — i.e.
+        // once per poll — leaving the timestamp frozen at "just now" in between.
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            HStack {
+                if let error = appState.error {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundColor(ColorTheme.orange)
+                    Text(footerErrorText(for: error))
+                        .font(.caption2)
+                        .foregroundColor(ColorTheme.orange)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                } else if let lastUpdate = appState.lastUpdateTime {
+                    let nextUpdate = lastUpdate.addingTimeInterval(TimeInterval(appState.settings.refreshInterval))
+                    let timeString = DateFormatter.localizedString(from: nextUpdate, dateStyle: .none, timeStyle: .short)
+                    Text("Updated \(lastUpdate.relativeDescription). Next update: \(timeString)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
-
-            // Spacer()
-
-            // Powered by puq.ai (sağ tarafa taşındı)
-            // poweredByView
         }
     }
 
