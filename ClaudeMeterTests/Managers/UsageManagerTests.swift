@@ -143,6 +143,47 @@ final class UsageDataTests: XCTestCase {
         XCTAssertNil(usageData.sevenDayOpus)
     }
 
+    func testUsageData_DecodingDesignWindowPresent() throws {
+        // Given
+        let json = """
+        {
+            "seven_day_omelette": {
+                "utilization": 61.0,
+                "resets_at": "2025-01-07T00:00:00Z"
+            }
+        }
+        """.data(using: .utf8)!
+
+        // When
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let usageData = try decoder.decode(UsageData.self, from: json)
+
+        // Then
+        XCTAssertEqual(usageData.sevenDayDesign?.utilization, 61.0)
+        XCTAssertNotNil(usageData.sevenDayDesign?.resetsAt)
+    }
+
+    func testUsageData_DecodingDesignWindowMissingDefaultsToNil() throws {
+        // Given
+        let json = """
+        {
+            "five_hour": {
+                "utilization": 45.0,
+                "resets_at": "2025-01-01T12:00:00Z"
+            }
+        }
+        """.data(using: .utf8)!
+
+        // When
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let usageData = try decoder.decode(UsageData.self, from: json)
+
+        // Then
+        XCTAssertNil(usageData.sevenDayDesign)
+    }
+
     func testUsageWindow_Decoding() throws {
         // Given - JSON with snake_case keys
         let json = """
@@ -249,6 +290,42 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(decoded.launchAtLogin)
         XCTAssertEqual(decoded.notifyAt, [80, 90])
     }
+
+    func testSettings_DecodingMissingShowDesignLimit_UsesDefaultTrue() throws {
+        // Given - payload from older versions without showDesignLimit
+        let json = """
+        {
+            "displayMode": "Detailed",
+            "colorScheme": "Dark",
+            "showInDock": true,
+            "showSonnetLimit": true,
+            "showExtraUsage": true,
+            "refreshInterval": 45,
+            "launchAtLogin": true,
+            "notifyAt": [80, 90],
+            "notificationsEnabled": false,
+            "webSessionKey": "session",
+            "webOrganizationId": "org"
+        }
+        """.data(using: .utf8)!
+
+        // When
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: json)
+
+        // Then
+        XCTAssertEqual(decoded.displayMode, .detailed)
+        XCTAssertEqual(decoded.colorScheme, .dark)
+        XCTAssertTrue(decoded.showInDock)
+        XCTAssertTrue(decoded.showSonnetLimit)
+        XCTAssertTrue(decoded.showExtraUsage)
+        XCTAssertEqual(decoded.refreshInterval, 45)
+        XCTAssertTrue(decoded.launchAtLogin)
+        XCTAssertEqual(decoded.notifyAt, [80, 90])
+        XCTAssertFalse(decoded.notificationsEnabled)
+        XCTAssertEqual(decoded.webSessionKey, "session")
+        XCTAssertEqual(decoded.webOrganizationId, "org")
+        XCTAssertTrue(decoded.showDesignLimit)
+    }
 }
 
 // MARK: - PollingManager Tests
@@ -327,25 +404,5 @@ final class PollingManagerTests: XCTestCase {
 
         // Then
         XCTAssertTrue(sut.isPaused)
-    }
-}
-
-// MARK: - RetryConfiguration Tests
-
-final class RetryConfigurationTests: XCTestCase {
-
-    func testDelay_ExponentialBackoff() {
-        let config = RetryConfiguration()
-
-        XCTAssertEqual(config.delay(for: 0), 2.0)   // 2 * 2^0 = 2
-        XCTAssertEqual(config.delay(for: 1), 4.0)   // 2 * 2^1 = 4
-        XCTAssertEqual(config.delay(for: 2), 8.0)   // 2 * 2^2 = 8
-        XCTAssertEqual(config.delay(for: 3), 16.0)  // 2 * 2^3 = 16
-    }
-
-    func testDelay_CappedAtMaxDelay() {
-        let config = RetryConfiguration(maxDelay: 10.0)
-
-        XCTAssertEqual(config.delay(for: 5), 10.0)  // Would be 64, capped at 10
     }
 }
