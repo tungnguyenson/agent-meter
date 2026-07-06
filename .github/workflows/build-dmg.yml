@@ -1,23 +1,32 @@
 name: Build DMG
 
-# Build the distributable DMG only for the main branch. The push trigger is
-# filtered to main, so pushes to any other branch never start this workflow.
+# Builds the distributable DMG in two situations only:
+#   - push to main            -> dev prerelease tagged v<MARKETING_VERSION>-build.<run>
+#   - push a tag like v1.0.0  -> full release tagged with that exact version
+# Feature branches never build: the push trigger is filtered to main + v* tags.
+# A specific version can also be built from the Actions "Run workflow" button.
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, e.g. 1.0.0 (blank = dev prerelease from MARKETING_VERSION)'
+        required: false
+        default: ''
 
 concurrency:
   group: build-dmg-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write # create releases and push the release tag
 
 jobs:
   build-dmg:
-    # Second guard: covers manual dispatch, so the DMG is never built off main.
-    if: github.ref == 'refs/heads/main'
+    # Second guard: covers manual dispatch, so the DMG is only built off main or a v* tag.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-15
     steps:
       - name: Checkout
@@ -36,12 +45,33 @@ jobs:
 
       - name: Resolve app version
         id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          VERSION=$(xcodebuild -project ClaudeMeter.xcodeproj -scheme ClaudeMeter -showBuildSettings 2>/dev/null \
-            | awk -F' = ' '$1 ~ /(^| )MARKETING_VERSION$/ { print $2; exit }')
-          VERSION="${VERSION:-1.0}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: ${VERSION}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            # Tag push (e.g. v1.0.0): use the tag as an exact, full release.
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            TAG="${GITHUB_REF#refs/tags/}"
+            RELEASE=true
+          elif [[ -n "${INPUT_VERSION}" ]]; then
+            # Manual dispatch with an explicit version -> full release, tag created here.
+            VERSION="${INPUT_VERSION#v}"
+            TAG="v${VERSION}"
+            RELEASE=true
+          else
+            # Push to main (or dispatch with no version) -> dev prerelease.
+            VERSION=$(xcodebuild -project ClaudeMeter.xcodeproj -scheme ClaudeMeter -showBuildSettings 2>/dev/null \
+              | awk -F' = ' '$1 ~ /(^| )MARKETING_VERSION$/ { print $2; exit }')
+            VERSION="${VERSION:-1.0}"
+            TAG="v${VERSION}-build.${GITHUB_RUN_NUMBER}"
+            RELEASE=false
+          fi
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "release=${RELEASE}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved: version=${VERSION} tag=${TAG} release=${RELEASE}"
 
       - name: Build DMG
         env:
@@ -57,3 +87,17 @@ jobs:
           name: ClaudeMeter-${{ steps.version.outputs.version }}-${{ github.sha }}
           path: ClaudeMeter-*.dmg
           if-no-files-found: error
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          # --target pins the tag to this commit; ignored when the tag already exists.
+          ARGS=(ClaudeMeter-*.dmg --target "${{ github.sha }}" --generate-notes)
+          if [[ "${{ steps.version.outputs.release }}" == "true" ]]; then
+            ARGS+=(--title "ClaudeMeter ${TAG}")
+          else
+            ARGS+=(--title "ClaudeMeter v${{ steps.version.outputs.version }} (build ${{ github.run_number }})" --prerelease)
+          fi
+          gh release create "$TAG" "${ARGS[@]}"
