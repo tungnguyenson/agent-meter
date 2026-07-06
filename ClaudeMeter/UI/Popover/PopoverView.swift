@@ -296,7 +296,7 @@ struct PopoverView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.caption2)
                     .foregroundColor(ColorTheme.orange)
-                Text(error.localizedDescription)
+                Text(footerErrorText(for: error))
                     .font(.caption2)
                     .foregroundColor(ColorTheme.orange)
                     .lineLimit(1)
@@ -309,11 +309,29 @@ struct PopoverView: View {
                     .foregroundColor(.secondary)
             }
 
-            Spacer()
+            // Spacer()
 
             // Powered by puq.ai (sağ tarafa taşındı)
-            poweredByView
+            // poweredByView
         }
+    }
+
+    /// Compact footer text for errors. When the scheduler is in an active
+    /// rate-limit cooldown, show the next update time instead of the full
+    /// localized description.
+    private func footerErrorText(for error: Error) -> String {
+        if let cooldownUntil = appState.pollingManager.activeRateLimitCooldown {
+            let timeString = DateFormatter.localizedString(
+                from: cooldownUntil,
+                dateStyle: .none,
+                timeStyle: .short
+            )
+            if let lastUpdate = appState.lastUpdateTime {
+                return "Updated \(lastUpdate.relativeDescription). Next update: \(timeString) (rate limit)"
+            }
+            return "Rate limit. Next update: \(timeString)"
+        }
+        return error.localizedDescription
     }
 
     // MARK: - Extra Usage Card

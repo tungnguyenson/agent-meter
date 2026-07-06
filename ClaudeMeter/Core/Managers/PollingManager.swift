@@ -59,6 +59,19 @@ class PollingManager {
     // Rate limit gate
     private var lastRequestTime: Date?
     private var rateLimitCooldownUntil: Date?
+    private static let rateLimitPersistKey = "com.claudemeter.rateLimitCooldownUntil"
+
+    // Auth failure gate — permanent until user-initiated refresh clears it.
+    // Rule: credential/auth errors will never recover on their own.
+    private(set) var hasAuthFailure: Bool = false
+
+    /// Public read-only access to the active 429 cooldown deadline, if any.
+    var activeRateLimitCooldown: Date? {
+        guard let cooldownUntil = rateLimitCooldownUntil, cooldownUntil > Date() else {
+            return nil
+        }
+        return cooldownUntil
+    }
 
     // Concurrent fetch guard
     private(set) var isFetching: Bool = false
@@ -67,6 +80,25 @@ class PollingManager {
     init(config: Config = Config()) {
         self.config = config
         self.currentInterval = config.defaultInterval
+        restorePersistedRateLimit()
+    }
+
+    /// Restore a persisted 429 cooldown from UserDefaults so a restart during a
+    /// rate-limit window does not hammer the API.
+    private func restorePersistedRateLimit() {
+        let stored = UserDefaults.standard.double(forKey: Self.rateLimitPersistKey)
+        guard stored > 0 else { return }
+        let deadline = Date(timeIntervalSince1970: stored)
+        if deadline > Date() {
+            rateLimitCooldownUntil = deadline
+            // Mirror the in-memory circuit-breaker state so the next fetch
+            // correctly returns to normal after the cooldown expires.
+            consecutiveFailures = config.maxConsecutiveFailures
+            isInFailureBackoff = true
+            print("PollingManager: Restored rate-limit cooldown until \(deadline)")
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.rateLimitPersistKey)
+        }
     }
 
     // MARK: - Public Methods
@@ -74,6 +106,17 @@ class PollingManager {
     func start(immediateRefresh: Bool = true, onTick: @escaping () async -> Void) {
         self.onTick = onTick
         state = .running
+
+        // If a rate-limit cooldown is still in effect (e.g. restored from disk),
+        // schedule the first tick after the cooldown expires instead of the normal
+        // interval. No immediate fetch either, regardless of caller request.
+        if let cooldownUntil = rateLimitCooldownUntil, cooldownUntil > Date() {
+            let remaining = cooldownUntil.timeIntervalSinceNow
+            scheduleTimer(interval: remaining)
+            print("PollingManager: Starting under rate-limit cooldown, first tick in \(String(format: "%.0f", remaining))s")
+            return
+        }
+
         scheduleTimer(interval: currentInterval)
 
         // Trigger immediate fetch only if requested (e.g. skip if cached data is still fresh)
@@ -168,6 +211,8 @@ class PollingManager {
     /// Record a successful fetch - resets circuit breaker
     func recordSuccess() {
         consecutiveFailures = 0
+        rateLimitCooldownUntil = nil
+        UserDefaults.standard.removeObject(forKey: Self.rateLimitPersistKey)
         if isInFailureBackoff {
             isInFailureBackoff = false
             // Return to normal polling interval
@@ -178,15 +223,30 @@ class PollingManager {
         }
     }
 
-    /// Record a failed fetch - triggers circuit breaker after threshold
+    /// Rule 3: transient failures don't trigger retries or backoff —
+    /// the scheduler's next tick will try again at its normal cadence.
     func recordFailure() {
         consecutiveFailures += 1
-        if consecutiveFailures >= config.maxConsecutiveFailures && !isInFailureBackoff {
-            isInFailureBackoff = true
-            // Switch to longer backoff interval
-            if state == .running {
-                scheduleTimer(interval: config.failureBackoffInterval)
-            }
+    }
+
+    /// Rule 2: mark auth failure as permanent. No ticks will fire until
+    /// the user explicitly clears it via a manual refresh / re-auth.
+    func recordAuthFailure() {
+        hasAuthFailure = true
+        timer?.invalidate()
+        timer = nil
+        print("PollingManager: Auth failure recorded — polling halted until manual refresh")
+    }
+
+    /// Clear the auth-failure gate. Called when the user takes an explicit
+    /// action (manual refresh button, re-authentication, settings change).
+    func clearAuthFailure() {
+        guard hasAuthFailure else { return }
+        hasAuthFailure = false
+        consecutiveFailures = 0
+        print("PollingManager: Auth failure cleared by user action")
+        if state == .running {
+            scheduleTimer(interval: calculateInterval(for: lastUsage))
         }
     }
 
@@ -275,7 +335,13 @@ class PollingManager {
 
     /// Central gate for all API requests. Returns false if request should be blocked.
     func canMakeRequest(reason: String = "unknown") -> Bool {
-        // Check 429 cooldown
+        // Rule 2: auth failure is permanent — never retry automatically.
+        if hasAuthFailure {
+            print("PollingManager: Request blocked (\(reason)) - auth failure, manual re-auth required")
+            return false
+        }
+
+        // Rule 1: honor 429 cooldown; never touch the API while it's active.
         if let cooldownUntil = rateLimitCooldownUntil, Date() < cooldownUntil {
             let remaining = cooldownUntil.timeIntervalSince(Date())
             print("PollingManager: Request blocked (\(reason)) - rate limit cooldown, \(String(format: "%.0f", remaining))s remaining")
@@ -300,10 +366,25 @@ class PollingManager {
         return true
     }
 
-    /// Record a 429 rate limit hit and enter cooldown
+    /// Record a 429 rate limit hit and enter cooldown.
+    /// Trusts the server-supplied duration when present; otherwise falls back to a
+    /// conservative default. 429s are never retried at request level — the scheduler
+    /// is the single gate controlling when the next fetch can happen.
     func recordRateLimitHit(retryAfter: TimeInterval?) {
-        let cooldown = min(retryAfter ?? Constants.RateLimit.defaultCooldownDuration, Constants.RateLimit.maxCooldownDuration)
-        rateLimitCooldownUntil = Date().addingTimeInterval(cooldown)
+        let source: String
+        let cooldownRequested: TimeInterval
+        if let retryAfter, retryAfter > 0 {
+            cooldownRequested = retryAfter
+            source = "server"
+        } else {
+            cooldownRequested = Constants.RateLimit.defaultCooldownDuration
+            source = "default"
+        }
+        let cooldown = min(cooldownRequested, Constants.RateLimit.maxCooldownDuration)
+
+        let deadline = Date().addingTimeInterval(cooldown)
+        rateLimitCooldownUntil = deadline
+        UserDefaults.standard.set(deadline.timeIntervalSince1970, forKey: Self.rateLimitPersistKey)
 
         // Activate circuit breaker immediately
         consecutiveFailures = config.maxConsecutiveFailures
@@ -314,7 +395,7 @@ class PollingManager {
             scheduleTimer(interval: cooldown)
         }
 
-        print("PollingManager: Rate limited - cooldown for \(String(format: "%.0f", cooldown))s")
+        print("PollingManager: Rate limited - cooldown for \(String(format: "%.0f", cooldown))s (\(source))")
     }
 
     /// Check if data is stale enough to warrant a new request

@@ -10,15 +10,10 @@ import Foundation
 
 /// Protocol defining the API service interface for fetching usage data
 protocol APIServiceProtocol {
-    /// Fetch usage data without retry
+    /// Fetch usage data. Never retries — callers rely on the scheduler.
     /// - Parameter token: The authentication token
     /// - Returns: UsageData from the API
     func fetchUsage(token: String) async throws -> UsageData
-
-    /// Fetch usage data with automatic retry and exponential backoff
-    /// - Parameter token: The authentication token
-    /// - Returns: UsageData from the API
-    func fetchUsageWithRetry(token: String) async throws -> UsageData
 
     /// Validate if a token is valid
     /// - Parameter token: The authentication token to validate

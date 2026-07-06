@@ -16,7 +16,6 @@ enum APIError: Error, LocalizedError {
     case unauthorized // 401
     case rateLimited(retryAfter: TimeInterval?)  // 429
     case networkError(Error)
-    case maxRetriesExceeded(lastError: Error?)
     case unknown(Error)
 
     var errorDescription: String? {
@@ -38,47 +37,25 @@ enum APIError: Error, LocalizedError {
             return "Rate limited - please wait"
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
-        case .maxRetriesExceeded(let lastError):
-            if let lastError = lastError {
-                return "Maximum retries exceeded. Last error: \(lastError.localizedDescription)"
-            }
-            return "Maximum retries exceeded"
         case .unknown(let error):
             return "Unknown error: \(error.localizedDescription)"
         }
     }
 }
 
-// MARK: - Retry Configuration
-struct RetryConfiguration {
-    var maxRetries: Int = Constants.Retry.maxRetries
-    var initialDelay: TimeInterval = Constants.Retry.initialDelay
-    var maxDelay: TimeInterval = Constants.Retry.maxDelay
-    var multiplier: Double = Constants.Retry.multiplier
-
-    /// Calculate delay for a given retry attempt (0-indexed)
-    func delay(for attempt: Int) -> TimeInterval {
-        let delay = initialDelay * pow(multiplier, Double(attempt))
-        return min(delay, maxDelay)
-    }
-}
-
 class APIService: APIServiceProtocol {
     private let baseURL = Constants.API.baseURL
     private let session: URLSession
-    private let retryConfig: RetryConfiguration
 
-    init(session: URLSession? = nil, retryConfig: RetryConfiguration = RetryConfiguration()) {
+    init(session: URLSession? = nil) {
         if let session = session {
             self.session = session
         } else {
-            // Configure URLSession with reasonable timeouts
             let config = URLSessionConfiguration.default
             config.timeoutIntervalForRequest = Constants.API.requestTimeout
             config.timeoutIntervalForResource = Constants.API.resourceTimeout
             self.session = URLSession(configuration: config)
         }
-        self.retryConfig = retryConfig
     }
 
     // MARK: - Endpoints
@@ -155,7 +132,7 @@ class APIService: APIServiceProtocol {
         case 401:
             throw APIError.unauthorized
         case 429:
-            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            let retryAfter = Self.parseRetryAfter(response: httpResponse, body: data)
             throw APIError.rateLimited(retryAfter: retryAfter)
         case 500...599:
             throw APIError.serverError(statusCode: httpResponse.statusCode)
@@ -164,51 +141,92 @@ class APIService: APIServiceProtocol {
         }
     }
 
-    /// Fetch usage data with automatic retry and exponential backoff
-    func fetchUsageWithRetry(token: String) async throws -> UsageData {
-        var lastError: Error = APIError.unknown(NSError(domain: "Unknown", code: -1))
+    // MARK: - Retry-After parsing
 
-        for attempt in 0..<retryConfig.maxRetries {
-            do {
-                return try await fetchUsage(token: token)
-            } catch let error as APIError {
-                lastError = error
-
-                switch error {
-                case .rateLimited:
-                    // NEVER retry on 429 - each retry extends the rate limit window
-                    throw error
-
-                case .serverError(let code) where code >= 500:
-                    // 5xx: Wait longer before retry
-                    let delay = max(retryConfig.delay(for: attempt), Constants.Retry.serverErrorMinDelay)
-                    print("APIService: Server error \(code), waiting \(delay)s before retry \(attempt + 1)")
-                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-
-                case .unauthorized:
-                    // Don't retry auth errors
-                    throw error
-
-                case .networkError:
-                    // Network errors: short delay and retry
-                    let delay = retryConfig.delay(for: attempt)
-                    print("APIService: Network error, waiting \(delay)s before retry \(attempt + 1)")
-                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-
-                default:
-                    // Other errors: don't retry
-                    throw error
-                }
-            } catch {
-                // URLSession errors (network issues)
-                lastError = APIError.networkError(error)
-                let delay = retryConfig.delay(for: attempt)
-                print("APIService: Request failed, waiting \(delay)s before retry \(attempt + 1)")
-                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+    /// Extract the retry-after duration in seconds from a 429 response.
+    /// Checks (in order): `Retry-After` header as seconds, `Retry-After` as HTTP-date,
+    /// JSON body `error.retry_after` field, and natural-language patterns in the body
+    /// like "retry after 3600s" / "try again in 60 seconds".
+    /// Returns nil if no usable value can be extracted. Zero is treated as nil.
+    static func parseRetryAfter(response: HTTPURLResponse, body: Data) -> TimeInterval? {
+        // 1. Retry-After header as integer seconds
+        if let headerValue = response.value(forHTTPHeaderField: "Retry-After") {
+            if let seconds = TimeInterval(headerValue), seconds > 0 {
+                return seconds
+            }
+            // 2. Retry-After header as HTTP-date
+            let dateFormatter = DateFormatter()
+            dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+            dateFormatter.timeZone = TimeZone(identifier: "GMT")
+            dateFormatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+            if let date = dateFormatter.date(from: headerValue) {
+                let delta = date.timeIntervalSinceNow
+                if delta > 0 { return delta }
             }
         }
 
-        throw APIError.maxRetriesExceeded(lastError: lastError)
+        // 3. JSON body inspection
+        if let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+            if let error = json["error"] as? [String: Any] {
+                if let retryAfter = error["retry_after"] as? TimeInterval, retryAfter > 0 {
+                    return retryAfter
+                }
+                if let retryAfter = (error["retry_after"] as? NSNumber)?.doubleValue, retryAfter > 0 {
+                    return retryAfter
+                }
+                if let message = error["message"] as? String,
+                   let parsed = parseDurationFromText(message) {
+                    return parsed
+                }
+            }
+            if let message = json["message"] as? String,
+               let parsed = parseDurationFromText(message) {
+                return parsed
+            }
+        }
+
+        // 4. Plain-text body fallback
+        if let text = String(data: body, encoding: .utf8),
+           let parsed = parseDurationFromText(text) {
+            return parsed
+        }
+
+        return nil
+    }
+
+    /// Extract a duration in seconds from free-form text.
+    /// Recognizes phrases like "retry after 3600s", "retry after 120 seconds",
+    /// "try again in 5 minutes", "wait 2 hours". Returns nil if nothing matches.
+    static func parseDurationFromText(_ text: String) -> TimeInterval? {
+        let lowered = text.lowercased()
+
+        // seconds: "retry after 3600s", "retry after 120 seconds", "in 60s", "wait 60 seconds"
+        if let value = firstNumberMatch(in: lowered, pattern: #"(\d+(?:\.\d+)?)\s*(?:s(?:econds?)?|secs?)\b"#),
+           value > 0 {
+            return value
+        }
+
+        // minutes
+        if let value = firstNumberMatch(in: lowered, pattern: #"(\d+(?:\.\d+)?)\s*(?:m(?:inutes?)?|mins?)\b"#),
+           value > 0 {
+            return value * 60
+        }
+
+        // hours
+        if let value = firstNumberMatch(in: lowered, pattern: #"(\d+(?:\.\d+)?)\s*(?:h(?:ours?)?|hrs?)\b"#),
+           value > 0 {
+            return value * 3600
+        }
+
+        return nil
+    }
+
+    private static func firstNumberMatch(in text: String, pattern: String) -> Double? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range), match.numberOfRanges >= 2,
+              let numberRange = Range(match.range(at: 1), in: text) else { return nil }
+        return Double(text[numberRange])
     }
 
     func validateToken(_ token: String) async -> Bool {
@@ -280,7 +298,7 @@ class APIService: APIServiceProtocol {
         case 401, 403:
             throw APIError.unauthorized
         case 429:
-            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            let retryAfter = Self.parseRetryAfter(response: httpResponse, body: data)
             throw APIError.rateLimited(retryAfter: retryAfter)
         case 500...599:
             throw APIError.serverError(statusCode: httpResponse.statusCode)
@@ -301,14 +319,3 @@ class APIService: APIServiceProtocol {
     }
 }
 
-// MARK: - Async Extension for easier use
-extension APIService {
-    /// Convenience method that automatically uses retry
-    func getUsage(token: String, withRetry: Bool = true) async throws -> UsageData {
-        if withRetry {
-            return try await fetchUsageWithRetry(token: token)
-        } else {
-            return try await fetchUsage(token: token)
-        }
-    }
-}

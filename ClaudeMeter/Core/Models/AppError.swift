@@ -156,8 +156,6 @@ extension AppError {
             return .rateLimited(retryAfter: retryAfter)
         case .networkError(let error):
             return .unknown(error.localizedDescription)
-        case .maxRetriesExceeded:
-            return .serverUnreachable
         case .unknown(let error):
             return .unknown(error.localizedDescription)
         }

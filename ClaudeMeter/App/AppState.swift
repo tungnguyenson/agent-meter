@@ -60,6 +60,14 @@ class AppState: ObservableObject {
             lastUpdateTime = Date().addingTimeInterval(-cacheAge)
         }
 
+        // Restore persisted rate-limit state so the UI shows the banner and
+        // the scheduler refuses to fetch until the cooldown expires. Writing
+        // to usageManager.error lets the existing $error binding propagate.
+        if let cooldownUntil = pollingManager.activeRateLimitCooldown {
+            let remaining = cooldownUntil.timeIntervalSinceNow
+            usageManager.error = AppError.rateLimited(retryAfter: remaining)
+        }
+
         // Setup network monitor for wake recovery
         pollingManager.startNetworkMonitor { [weak self] in
             Task { @MainActor in
@@ -76,7 +84,7 @@ class AppState: ObservableObject {
             // press "Refresh usage data" if they want fresh data immediately.
             // This avoids hammering the API during rate-limit or error states.
             self.pollingManager.start(immediateRefresh: false) { [weak self] in
-                await self?.performRefresh()
+                await self?.performRefresh(reason: "timer")
             }
         }
 
@@ -143,23 +151,51 @@ class AppState: ObservableObject {
     // MARK: - Data Refresh
 
     func refresh(reason: String = "unknown") async {
-        guard pollingManager.canMakeRequest(reason: reason) else { return }
-        await performRefresh()
+        await performRefresh(reason: reason)
     }
 
-    /// Internal refresh used by polling timer (timer already checks canMakeRequest)
-    private func performRefresh() async {
+    /// Unified refresh path. Enforces the rate-limit + auth-failure gates for
+    /// every caller so a restored 429 cooldown or permanent auth failure
+    /// cannot be bypassed. User-initiated reasons clear the auth gate first.
+    private func performRefresh(reason: String = "timer") async {
+        if Self.isUserInitiated(reason: reason) {
+            pollingManager.clearAuthFailure()
+        }
+        guard pollingManager.canMakeRequest(reason: reason) else { return }
         guard pollingManager.beginFetch() else { return }
         defer { pollingManager.endFetch() }
         await usageManager.fetchUsage()
+
         if usageManager.error == nil {
             lastUpdateTime = Date()
             pollingManager.recordSuccess()
-        } else if let appError = usageManager.error as? AppError,
-                  case .rateLimited(let retryAfter) = appError {
-            pollingManager.recordRateLimitHit(retryAfter: retryAfter)
-        } else {
+            return
+        }
+
+        guard let appError = usageManager.error as? AppError else {
             pollingManager.recordFailure()
+            return
+        }
+
+        switch appError {
+        case .rateLimited(let retryAfter):
+            // Rule 1: respect retry-after window, no attempts during cooldown.
+            pollingManager.recordRateLimitHit(retryAfter: retryAfter)
+        case .noCredentials, .invalidCredentials, .credentialsExpired, .authenticationFailed:
+            // Rule 2: auth errors never recover automatically.
+            pollingManager.recordAuthFailure()
+        default:
+            // Rule 3: no retry — the next scheduled tick will try again.
+            pollingManager.recordFailure()
+        }
+    }
+
+    private static func isUserInitiated(reason: String) -> Bool {
+        switch reason {
+        case "manual_refresh", "retry_button", "empty_state_refresh":
+            return true
+        default:
+            return false
         }
     }
 
@@ -235,37 +271,18 @@ class AppState: ObservableObject {
             print("AppState: Significant sleep (\(String(format: "%.0f", sleepDuration))s), invalidated stale data")
         }
 
-        // Start wake recovery with retry logic
+        // Wake recovery: a single attempt after a short network-settle delay,
+        // then let the scheduler drive subsequent ticks. No retry loop.
+        // If the network is still down, NWPathMonitor will fire a refresh
+        // when it comes back.
         wakeRetryTask = Task { @MainActor [weak self] in
             guard let self = self else { return }
-
-            // Initial delay for network to become available
             let initialNanos = UInt64(Constants.WakeRecovery.initialDelay * 1_000_000_000)
             try? await Task.sleep(nanoseconds: initialNanos)
-
-            let retryDelays = Constants.WakeRecovery.retryDelays
-            for (index, delay) in retryDelays.enumerated() {
-                guard !Task.isCancelled else { return }
-
-                print("AppState: Wake recovery attempt \(index + 1)/\(retryDelays.count)")
-                await self.refresh(reason: "wake_recovery")
-
-                if self.usageManager.error == nil && self.usageData != nil {
-                    print("AppState: Wake recovery succeeded on attempt \(index + 1)")
-                    self.pollingManager.schedulePostWakeTimer()
-                    return
-                }
-
-                // Wait before next retry (except on last attempt)
-                if index < retryDelays.count - 1 {
-                    let delayNanos = UInt64(delay * 1_000_000_000)
-                    try? await Task.sleep(nanoseconds: delayNanos)
-                }
-            }
-
-            // All retries exhausted - start normal polling anyway, NWPathMonitor will trigger when network returns
             guard !Task.isCancelled else { return }
-            print("AppState: Wake recovery exhausted all retries, falling back to normal polling")
+
+            await self.refresh(reason: "wake_recovery")
+            guard !Task.isCancelled else { return }
             self.pollingManager.schedulePostWakeTimer()
         }
     }

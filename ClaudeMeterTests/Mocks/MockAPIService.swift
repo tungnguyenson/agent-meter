@@ -13,7 +13,6 @@ import Foundation
 class MockAPIService: APIServiceProtocol {
     // MARK: - Call Tracking
     var fetchUsageCallCount = 0
-    var fetchUsageWithRetryCallCount = 0
     var validateTokenCallCount = 0
     var lastToken: String?
 
@@ -26,21 +25,6 @@ class MockAPIService: APIServiceProtocol {
 
     func fetchUsage(token: String) async throws -> UsageData {
         fetchUsageCallCount += 1
-        lastToken = token
-
-        if let error = stubbedError {
-            throw error
-        }
-
-        guard let data = stubbedUsageData else {
-            throw APIError.noData
-        }
-
-        return data
-    }
-
-    func fetchUsageWithRetry(token: String) async throws -> UsageData {
-        fetchUsageWithRetryCallCount += 1
         lastToken = token
 
         if let error = stubbedError {
@@ -74,7 +58,6 @@ class MockAPIService: APIServiceProtocol {
 
     func reset() {
         fetchUsageCallCount = 0
-        fetchUsageWithRetryCallCount = 0
         validateTokenCallCount = 0
         lastToken = nil
         stubbedUsageData = nil

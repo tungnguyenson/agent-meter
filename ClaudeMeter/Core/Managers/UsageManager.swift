@@ -74,9 +74,9 @@ class UsageManager: ObservableObject {
                 throw AppError.credentialsExpired
             }
 
-            // 2. Fetch Data with retry
+            // 2. Fetch Data (no retry — scheduler owns retry cadence)
             DebugLogger.shared.log(.request, "API: fetchUsage")
-            let data = try await apiService.fetchUsageWithRetry(token: credentials.accessToken)
+            let data = try await apiService.fetchUsage(token: credentials.accessToken)
             DebugLogger.shared.log(.response, "API: fetchUsage SUCCESS")
 
             // 3. Update State

@@ -34,19 +34,11 @@ enum Constants {
     // MARK: - Rate Limit Configuration
     enum RateLimit {
         static let minimumRequestInterval: TimeInterval = 15
-        static let defaultCooldownDuration: TimeInterval = 60
+        /// Fallback cooldown when a 429 has no parseable Retry-After value.
+        static let defaultCooldownDuration: TimeInterval = 300
         static let maxCooldownDuration: TimeInterval = 86400
         static let stalenessThreshold: TimeInterval = 30
         static let manualRefreshDebounce: TimeInterval = 5
-    }
-
-    // MARK: - Retry Configuration
-    enum Retry {
-        static let maxRetries = 3
-        static let initialDelay: TimeInterval = 2.0
-        static let maxDelay: TimeInterval = 30.0
-        static let multiplier: Double = 2.0
-        static let serverErrorMinDelay: TimeInterval = 30.0
     }
 
     // MARK: - Polling Configuration
@@ -136,9 +128,7 @@ enum Constants {
     // MARK: - Wake Recovery Configuration
     enum WakeRecovery {
         static let initialDelay: TimeInterval = 2.0
-        static let retryDelays: [TimeInterval] = [5, 15, 30]
         static let significantSleepDuration: TimeInterval = 300  // 5 minutes
-        static let maxRetries = 3
     }
 
     // MARK: - Statistics Configuration
