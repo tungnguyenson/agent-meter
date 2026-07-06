@@ -21,7 +21,18 @@ enum Constants {
         static let resourceTimeout: TimeInterval = 60
 
         // Headers
-        static let userAgent = "claude-code/2.1.70"
+        /// Client name used in the `User-Agent` header. Combined with the
+        /// installed CLI version by `ClaudeCodeVersionResolver`.
+        static let clientName = "claude-code"
+        /// Fallback CLI version, used only when the installed Claude Code
+        /// version cannot be detected. Keep reasonably current so requests are
+        /// not rejected on machines where detection fails. See
+        /// `ClaudeCodeVersionResolver` for the runtime resolution path.
+        static let fallbackClientVersion = "2.1.201"
+        /// Static fallback `User-Agent`. Prefer
+        /// `ClaudeCodeVersionResolver.shared.userAgent`, which reflects the
+        /// version of the Claude Code CLI actually installed on this machine.
+        static let userAgent = "\(clientName)/\(fallbackClientVersion)"
         static let anthropicBeta = "oauth-2025-04-20"
         static let contentType = "application/json"
         static let acceptType = "application/json"

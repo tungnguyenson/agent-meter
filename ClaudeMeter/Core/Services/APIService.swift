@@ -46,11 +46,17 @@ enum APIError: Error, LocalizedError {
 class APIService: APIServiceProtocol {
     private let baseURL = Constants.API.baseURL
     private let session: URLSession
+    /// `User-Agent` reflecting the installed Claude Code CLI version so requests
+    /// are not rejected when the pinned version drifts out of date.
+    private let userAgent: String
     #if DEBUG
     private static let debugLogQueue = DispatchQueue(label: "ClaudeMeter.APIService.debugLogQueue")
     #endif
 
-    init(session: URLSession? = nil) {
+    init(
+        session: URLSession? = nil,
+        userAgent: String = ClaudeCodeVersionResolver.shared.userAgent
+    ) {
         if let session = session {
             self.session = session
         } else {
@@ -59,6 +65,7 @@ class APIService: APIServiceProtocol {
             config.timeoutIntervalForResource = Constants.API.resourceTimeout
             self.session = URLSession(configuration: config)
         }
+        self.userAgent = userAgent
     }
 
     // MARK: - Endpoints
@@ -246,7 +253,7 @@ class APIService: APIServiceProtocol {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("sessionKey=\(sessionKey)", forHTTPHeaderField: "Cookie")
-        request.setValue(Constants.API.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await session.data(for: request)
 
@@ -355,7 +362,7 @@ class APIService: APIServiceProtocol {
     private func headers(token: String) -> [String: String] {
         return [
             "Authorization": "Bearer \(token)",
-            "User-Agent": Constants.API.userAgent,
+            "User-Agent": userAgent,
             "anthropic-beta": Constants.API.anthropicBeta,
             "Accept": Constants.API.acceptType,
             "Content-Type": Constants.API.contentType

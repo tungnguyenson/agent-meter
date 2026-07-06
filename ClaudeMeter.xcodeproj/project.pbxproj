@@ -25,6 +25,7 @@
 		SVC002 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC009; };
 		SVC003 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC010; };
 		SVC005 /* DebugLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC050; };
+		SVC006 /* ClaudeCodeVersionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC052; };
 
 		/* Core Managers */
 		MGR001 /* UsageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC012; };
@@ -75,6 +76,7 @@
 		TST001 /* APIServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC001; };
 		TST002 /* MockURLProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC002; };
 		TST003 /* KeychainServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC003; };
+		TST020 /* ClaudeCodeVersionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC020; };
 		TST004 /* UsageManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC004; };
 
 		/* Test Mocks */
@@ -134,6 +136,7 @@
 		SRC009 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		SRC010 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		SRC050 /* DebugLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugLogger.swift; sourceTree = "<group>"; };
+		SRC052 /* ClaudeCodeVersionResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeVersionResolver.swift; sourceTree = "<group>"; };
 
 		/* Core Managers */
 		SRC012 /* UsageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageManager.swift; sourceTree = "<group>"; };
@@ -184,6 +187,7 @@
 		TST_SRC001 /* APIServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIServiceTests.swift; sourceTree = "<group>"; };
 		TST_SRC002 /* MockURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockURLProtocol.swift; sourceTree = "<group>"; };
 		TST_SRC003 /* KeychainServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainServiceTests.swift; sourceTree = "<group>"; };
+		TST_SRC020 /* ClaudeCodeVersionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeVersionResolverTests.swift; sourceTree = "<group>"; };
 		TST_SRC004 /* UsageManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageManagerTests.swift; sourceTree = "<group>"; };
 
 		/* Test Mocks */
@@ -317,6 +321,7 @@
 				SRC009 /* KeychainService.swift */,
 				SRC010 /* NotificationService.swift */,
 				SRC050 /* DebugLogger.swift */,
+				SRC052 /* ClaudeCodeVersionResolver.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -433,6 +438,7 @@
 			children = (
 				TST_SRC001 /* APIServiceTests.swift */,
 				TST_SRC003 /* KeychainServiceTests.swift */,
+				TST_SRC020 /* ClaudeCodeVersionResolverTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -601,6 +607,7 @@
 				SVC002 /* KeychainService.swift in Sources */,
 				SVC003 /* NotificationService.swift in Sources */,
 				SVC005 /* DebugLogger.swift in Sources */,
+				SVC006 /* ClaudeCodeVersionResolver.swift in Sources */,
 				MGR001 /* UsageManager.swift in Sources */,
 				MGR002 /* PollingManager.swift in Sources */,
 				MGR003 /* CacheManager.swift in Sources */,
@@ -634,6 +641,7 @@
 				TST001 /* APIServiceTests.swift in Sources */,
 				TST002 /* MockURLProtocol.swift in Sources */,
 				TST003 /* KeychainServiceTests.swift in Sources */,
+				TST020 /* ClaudeCodeVersionResolverTests.swift in Sources */,
 				TST004 /* UsageManagerTests.swift in Sources */,
 				TST005 /* MockAPIService.swift in Sources */,
 				TST006 /* MockKeychainService.swift in Sources */,
