@@ -142,6 +142,34 @@ enum Constants {
         static let significantSleepDuration: TimeInterval = 300  // 5 minutes
     }
 
+    // MARK: - Usage Window Forecast
+    /// Tuning for the time-aware pace forecast (see `WindowForecast`). Raw
+    /// utilization is meaningless without time: 50% one hour into a five-hour
+    /// window is on pace to blow past the cap, while 50% four hours in is safe.
+    enum Window {
+        /// Fixed window durations, used to derive the window start from
+        /// `resetsAt` (`start = resetsAt − duration`).
+        static let fiveHourDuration: TimeInterval = 5 * 3600      // 18,000s
+        static let sevenDayDuration: TimeInterval = 7 * 86400     // 604,800s
+
+        /// Below this elapsed fraction the average-pace projection is too noisy
+        /// to trust — a couple of calls right after reset would read as "will
+        /// run out" — so callers fall back to a plain percentage colour.
+        static let minElapsedFractionForForecast: Double = 0.05
+
+        /// Projected end-of-window usage (%) that flips green → yellow while the
+        /// window is still on track to finish under the cap.
+        static let projectedWatchThreshold: Double = 90
+
+        /// When the window *will* exhaust, the fraction of the remaining time at
+        /// which exhaustion counts as "early" (→ red) versus "late" (→ orange).
+        static let earlyExhaustRatio: Double = 0.5
+
+        /// Absolute near-cap override: at or above this utilization the window is
+        /// critical regardless of pace (it is nearly out right now).
+        static let nearCapThreshold: Double = 95
+    }
+
     // MARK: - Statistics Configuration
     enum Statistics {
         static let storageFileName = "usage_statistics.json"

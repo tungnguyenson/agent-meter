@@ -5,6 +5,15 @@ name: Build DMG
 #   - push a tag like v1.0.0  -> full release tagged with that exact version
 # Feature branches never build: the push trigger is filtered to main + v* tags.
 # A specific version can also be built from the Actions "Run workflow" button.
+#
+# The app is signed with a Developer ID certificate and notarized, so users can
+# open it without Gatekeeper warnings. Configure these repository secrets
+# (Settings -> Secrets and variables -> Actions):
+#   MACOS_CERTIFICATE      base64 of the exported "Developer ID Application" .p12
+#   MACOS_CERTIFICATE_PWD  password set when exporting that .p12
+#   APPLE_TEAM_ID          10-character Apple Developer Team ID
+#   APPLE_ID               Apple ID email used for notarization
+#   APPLE_APP_PASSWORD     app-specific password for that Apple ID
 on:
   push:
     branches: [main]
@@ -28,6 +37,8 @@ jobs:
     # Second guard: covers manual dispatch, so the DMG is only built off main or a v* tag.
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-15
+    env:
+      APP_PATH: build/Build/Products/Release/ClaudeMeter.app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -73,13 +84,94 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Resolved: version=${VERSION} tag=${TAG} release=${RELEASE}"
 
-      - name: Build DMG
+      - name: Import Developer ID certificate
         env:
-          # No Apple Developer certificates in CI, so ad-hoc sign the app. It runs
-          # locally once users clear quarantine; a signed + notarized release would
-          # replace these flags with an imported cert and a notarization step.
-          XCODEBUILD_EXTRA_FLAGS: CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO CODE_SIGN_STYLE=Manual
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PWD="$(openssl rand -base64 24)"
+          # Expose the keychain path to later steps (build + cleanup).
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+          echo -n "$MACOS_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+
+          # Create an ephemeral keychain that lives only for this job.
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" -P "$MACOS_CERTIFICATE_PWD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          # Let codesign use the key without an interactive prompt.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH" >/dev/null
+          # Put the signing keychain on the search list so xcodebuild finds the identity.
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+          rm -f "$CERT_PATH"
+          echo "Imported signing identities:"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Build & sign app
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild -project ClaudeMeter.xcodeproj \
+            -scheme ClaudeMeter \
+            -configuration Release \
+            -derivedDataPath build \
+            clean build \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            ENABLE_HARDENED_RUNTIME=YES \
+            OTHER_CODE_SIGN_FLAGS=--timestamp \
+            -quiet
+          # Fail early if the signature is not a valid, sealed Developer ID one.
+          codesign --verify --strict --verbose=2 "$APP_PATH"
+
+      - name: Notarize & staple app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ZIP="$RUNNER_TEMP/notarize-app.zip"
+          ditto -c -k --keepParent "$APP_PATH" "$ZIP"
+          xcrun notarytool submit "$ZIP" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+          # Staple the ticket into the app so it launches cleanly even offline.
+          xcrun stapler staple "$APP_PATH"
+
+      - name: Package DMG
+        env:
+          SKIP_BUILD: "1"
         run: ./scripts/create-dmg.sh "${{ steps.version.outputs.version }}"
+
+      - name: Notarize & staple DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DMG="ClaudeMeter-${{ steps.version.outputs.version }}.dmg"
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+          xcrun stapler staple "$DMG"
+          # Confirm Gatekeeper accepts the mounted app.
+          xcrun stapler validate "$DMG"
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
@@ -101,3 +193,9 @@ jobs:
             ARGS+=(--title "ClaudeMeter v${{ steps.version.outputs.version }} (build ${{ github.run_number }})" --prerelease)
           fi
           gh release create "$TAG" "${ARGS[@]}"
+
+      - name: Clean up signing keychain
+        if: always()
+        run: |
+          security delete-keychain "${KEYCHAIN_PATH:-}" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/notarize-app.zip" "$RUNNER_TEMP/certificate.p12" || true

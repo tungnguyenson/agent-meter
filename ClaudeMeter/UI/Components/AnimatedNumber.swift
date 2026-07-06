@@ -48,16 +48,22 @@ struct AnimatedNumber: View {
 /// Animated percentage display
 struct AnimatedPercentage: View {
     let value: Double
+    /// Explicit colour; falls back to the plain percentage colour when nil.
+    var color: Color? = nil
+
+    private var resolvedColor: Color {
+        color ?? ColorTheme.colorForUsage(value)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             AnimatedNumber(
                 value: value,
                 format: "%.0f",
-                color: ColorTheme.colorForUsage(value)
+                color: resolvedColor
             )
             Text("%")
-                .foregroundColor(ColorTheme.colorForUsage(value))
+                .foregroundColor(resolvedColor)
         }
         .font(.system(.title2, design: .rounded).bold())
         .accessibilityElement(children: .ignore)

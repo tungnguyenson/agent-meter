@@ -15,6 +15,10 @@ struct ProgressBarView: View {
     let height: CGFloat
     let cornerRadius: CGFloat
     let animated: Bool
+    /// Explicit fill colour. When nil, falls back to the plain percentage colour.
+    /// Callers with a time-aware forecast pass its colour so the bar matches the
+    /// "will it run out before reset?" signal instead of a static threshold.
+    let colorOverride: Color?
     var accessibilityLabelText: String?
 
     @State private var displayedProgress: Double = 0
@@ -25,6 +29,7 @@ struct ProgressBarView: View {
         height: CGFloat = 8,
         cornerRadius: CGFloat = 4,
         animated: Bool = true,
+        color: Color? = nil,
         accessibilityLabel: String? = nil
     ) {
         self.progress = progress
@@ -32,11 +37,12 @@ struct ProgressBarView: View {
         self.height = height
         self.cornerRadius = cornerRadius
         self.animated = animated
+        self.colorOverride = color
         self.accessibilityLabelText = accessibilityLabel
     }
 
     private var color: Color {
-        ColorTheme.colorForUsage(progress * 100)
+        colorOverride ?? ColorTheme.colorForUsage(progress * 100)
     }
 
     private var usageLevel: String {
@@ -138,16 +144,19 @@ struct CircularProgressBar: View {
     let lineWidth: CGFloat
     let size: CGFloat
     let showLabel: Bool
+    /// Explicit stroke/label colour; falls back to the plain percentage colour.
+    let colorOverride: Color?
 
-    init(progress: Double, lineWidth: CGFloat = 8, size: CGFloat = 60, showLabel: Bool = true) {
+    init(progress: Double, lineWidth: CGFloat = 8, size: CGFloat = 60, showLabel: Bool = true, color: Color? = nil) {
         self.progress = progress
         self.lineWidth = lineWidth
         self.size = size
         self.showLabel = showLabel
+        self.colorOverride = color
     }
 
     private var color: Color {
-        ColorTheme.colorForUsage(progress * 100)
+        colorOverride ?? ColorTheme.colorForUsage(progress * 100)
     }
 
     var body: some View {

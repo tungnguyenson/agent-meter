@@ -12,19 +12,24 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="${PROJECT_DIR}/build"
 APP_PATH="${BUILD_DIR}/Build/Products/Release/${APP_NAME}.app"
 
-echo "==> Building ${APP_NAME} v${VERSION}..."
-
-# XCODEBUILD_EXTRA_FLAGS lets CI inject extra settings (e.g. ad-hoc signing)
-# without changing local behavior; it defaults to empty.
-xcodebuild -scheme "$APP_NAME" \
-  -configuration Release \
-  -derivedDataPath "$BUILD_DIR" \
-  clean build \
-  -quiet \
-  ${XCODEBUILD_EXTRA_FLAGS:-}
+# SKIP_BUILD lets a caller (e.g. CI, after it has already built, signed and
+# stapled the app) package the existing app instead of rebuilding over it.
+if [ -n "${SKIP_BUILD:-}" ]; then
+  echo "==> SKIP_BUILD set — packaging existing app at ${APP_PATH}"
+else
+  echo "==> Building ${APP_NAME} v${VERSION}..."
+  # XCODEBUILD_EXTRA_FLAGS lets a caller inject extra settings (e.g. signing)
+  # without changing local behavior; it defaults to empty.
+  xcodebuild -scheme "$APP_NAME" \
+    -configuration Release \
+    -derivedDataPath "$BUILD_DIR" \
+    clean build \
+    -quiet \
+    ${XCODEBUILD_EXTRA_FLAGS:-}
+fi
 
 if [ ! -d "$APP_PATH" ]; then
-  echo "ERROR: Build failed - ${APP_PATH} not found"
+  echo "ERROR: ${APP_PATH} not found"
   exit 1
 fi
 

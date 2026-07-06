@@ -176,7 +176,8 @@ struct PopoverView: View {
                     UsageCardView(
                         title: "5-Hour Limit",
                         usage: fiveHour.utilization,
-                        resetsAt: fiveHour.resetsAt
+                        resetsAt: fiveHour.resetsAt,
+                        windowDuration: Constants.Window.fiveHourDuration
                     )
                 }
 
@@ -184,7 +185,8 @@ struct PopoverView: View {
                     UsageCardView(
                         title: "7-Day Limit",
                         usage: sevenDay.utilization,
-                        resetsAt: sevenDay.resetsAt
+                        resetsAt: sevenDay.resetsAt,
+                        windowDuration: Constants.Window.sevenDayDuration
                     )
                 }
 
@@ -192,7 +194,8 @@ struct PopoverView: View {
                     UsageCardView(
                         title: "Sonnet Only",
                         usage: sonnet.utilization,
-                        resetsAt: sonnet.resetsAt
+                        resetsAt: sonnet.resetsAt,
+                        windowDuration: Constants.Window.sevenDayDuration
                     )
                 }
 
@@ -200,7 +203,8 @@ struct PopoverView: View {
                     UsageCardView(
                         title: "Claude Design",
                         usage: design.utilization,
-                        resetsAt: design.resetsAt
+                        resetsAt: design.resetsAt,
+                        windowDuration: Constants.Window.sevenDayDuration
                     )
                 }
 

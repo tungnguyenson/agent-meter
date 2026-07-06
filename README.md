@@ -32,7 +32,7 @@ A native macOS menu bar app that monitors your Claude Code usage, token consumpt
 2. Open the DMG and drag **ClaudeMeter.app** into your Applications folder
 3. Launch the app
 
-> Release builds are ad-hoc signed (not notarized), so the first launch may be blocked by Gatekeeper. If so, right-click the app and choose **Open**, then confirm.
+> Full releases are signed with a Developer ID certificate and notarized by Apple, so they open without a Gatekeeper prompt. See [docs/releasing.md](docs/releasing.md) for how releases are built and signed.
 
 ### Build from source
 
@@ -110,7 +110,7 @@ xcodebuild test -scheme ClaudeMeter
 xcodebuild test -scheme ClaudeMeter -only-testing ClaudeMeterTests/UsageManagerTests
 ```
 
-Pushes to `main` trigger the [Build DMG](.github/workflows/build-dmg.yml) GitHub Action, which builds the app, packages a DMG, and publishes it as a prerelease.
+Pushes to `main` trigger the [Build DMG](.github/workflows/build-dmg.yml) GitHub Action, which builds, signs, and notarizes the app, packages a DMG, and publishes it as a prerelease. Pushing a `v*` tag (e.g. `v1.0.0`) publishes a full release instead. See [docs/releasing.md](docs/releasing.md) for the full pipeline, trigger rules, and the signing secrets it needs.
 
 ## Contributing
 

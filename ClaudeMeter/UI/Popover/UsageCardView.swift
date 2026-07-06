@@ -12,13 +12,22 @@ struct UsageCardView: View {
     let title: String
     let usage: Double // Percentage 0-100
     let resetsAt: Date?
+    /// Fixed length of this window (5h / 7d). When provided alongside `resetsAt`
+    /// the card colours by a time-aware forecast instead of a static percentage.
+    var windowDuration: TimeInterval? = nil
+
+    private var forecast: WindowForecast? {
+        guard let windowDuration else { return nil }
+        return WindowForecast.make(utilization: usage, resetsAt: resetsAt, duration: windowDuration)
+    }
 
     private var progressColor: Color {
-        ColorTheme.colorForUsage(usage)
+        ColorTheme.color(for: forecast, fallbackUsage: usage)
     }
 
     private var isCritical: Bool {
-        usage >= 90
+        if let forecast { return forecast.status == .critical }
+        return usage >= 90
     }
 
     private var usageLevel: String {
@@ -35,6 +44,10 @@ struct UsageCardView: View {
         if let date = resetsAt {
             description += ". Resets in \(date.timeRemainingFormatted(style: .accessibilityFriendly))"
         }
+        if let forecast, forecast.willExhaust, let eta = forecast.timeToExhaust {
+            let etaText = Date(timeIntervalSinceNow: eta).timeRemainingFormatted(style: .medium)
+            description += ". At the current pace, runs out in \(etaText)"
+        }
         return description
     }
 
@@ -45,7 +58,7 @@ struct UsageCardView: View {
                 Text(title)
                     .font(.headline)
                 Spacer()
-                AnimatedPercentage(value: usage)
+                AnimatedPercentage(value: usage, color: progressColor)
             }
 
             // Progress Ring and Details
@@ -65,7 +78,8 @@ struct UsageCardView: View {
                     ProgressBarView(
                         progress: usage / 100.0,
                         showPercentage: false,
-                        height: 6
+                        height: 6,
+                        color: progressColor
                     )
                     .frame(maxWidth: .infinity)
 
@@ -78,6 +92,20 @@ struct UsageCardView: View {
                                 .font(.caption2)
                         }
                         .foregroundColor(.secondary)
+                    }
+
+                    // Pace warning: at the current rate the window runs out
+                    // before it resets. This is the whole point of the
+                    // time-aware colour — spell out how long is left.
+                    if let forecast, forecast.willExhaust, let eta = forecast.timeToExhaust {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                            Text("Runs out in \(Date(timeIntervalSinceNow: eta).timeRemainingFormatted())")
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundColor(progressColor)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -102,9 +130,15 @@ struct CompactUsageCardView: View {
     let title: String
     let usage: Double
     let resetsAt: Date?
+    var windowDuration: TimeInterval? = nil
+
+    private var forecast: WindowForecast? {
+        guard let windowDuration else { return nil }
+        return WindowForecast.make(utilization: usage, resetsAt: resetsAt, duration: windowDuration)
+    }
 
     private var progressColor: Color {
-        ColorTheme.colorForUsage(usage)
+        ColorTheme.color(for: forecast, fallbackUsage: usage)
     }
 
     var body: some View {
@@ -114,7 +148,8 @@ struct CompactUsageCardView: View {
                 progress: usage / 100.0,
                 lineWidth: 4,
                 size: 36,
-                showLabel: false
+                showLabel: false,
+                color: progressColor
             )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -152,19 +187,22 @@ struct CompactUsageCardView: View {
         UsageCardView(
             title: "5-Hour Limit",
             usage: 45,
-            resetsAt: Date().addingTimeInterval(3600)
+            resetsAt: Date().addingTimeInterval(3600),
+            windowDuration: Constants.Window.fiveHourDuration
         )
 
         UsageCardView(
             title: "7-Day Limit",
             usage: 78,
-            resetsAt: Date().addingTimeInterval(86400 * 3)
+            resetsAt: Date().addingTimeInterval(86400 * 3),
+            windowDuration: Constants.Window.sevenDayDuration
         )
 
         UsageCardView(
             title: "Opus Limit",
             usage: 95,
-            resetsAt: Date().addingTimeInterval(86400 * 5)
+            resetsAt: Date().addingTimeInterval(86400 * 5),
+            windowDuration: Constants.Window.sevenDayDuration
         )
 
         Divider()
@@ -172,7 +210,8 @@ struct CompactUsageCardView: View {
         CompactUsageCardView(
             title: "5-Hour",
             usage: 45,
-            resetsAt: Date().addingTimeInterval(3600)
+            resetsAt: Date().addingTimeInterval(3600),
+            windowDuration: Constants.Window.fiveHourDuration
         )
     }
     .padding()
