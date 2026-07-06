@@ -95,65 +95,131 @@ class StatusItemController: NSObject {
     }
 
     // MARK: - Detailed Mode
+
+    /// Renders each window as `[icon] used% trailing`, matching the reference
+    /// menu-bar design: the percentage takes the usage colour, while the icon
+    /// and trailing label sit in a muted secondary tone. A thin vertical
+    /// divider separates the 5-hour (clock) and 7-day (calendar) windows.
     private func updateDetailedMode(button: NSStatusBarButton, data: UsageData?, style: DetailedModeStyle) {
         button.image = nil
 
         guard let data = data else {
-            button.title = "-- | --"
+            button.attributedTitle = mutedTitle("-- | --")
             return
         }
 
-        var parts: [String] = []
+        var segments: [NSAttributedString] = []
 
         if let fiveHour = data.fiveHour {
-            parts.append(formatWindow(fiveHour, fixedLabel: "5h", style: style, units: .hoursMinutes))
+            segments.append(windowSegment(fiveHour, symbol: "clock", fixedLabel: "5h", style: style, units: .hoursMinutes))
         }
 
         if let sevenDay = data.sevenDay {
-            parts.append(formatWindow(sevenDay, fixedLabel: "7d", style: style, units: .daysHours))
+            segments.append(windowSegment(sevenDay, symbol: "calendar", fixedLabel: "7d", style: style, units: .daysHours))
         }
 
-        let title = parts.isEmpty ? "No data" : parts.joined(separator: " | ")
+        guard !segments.isEmpty else {
+            button.attributedTitle = mutedTitle("No data")
+            return
+        }
 
-        // Apply color to the title based on max usage
-        let maxUsage = calculateMaxUsage(from: data)
-        let color = colorForUsage(maxUsage)
-
-        let attributes: [NSAttributedString.Key: Any] = [
-            .foregroundColor: NSColor(color),
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
-        ]
-
-        button.attributedTitle = NSAttributedString(string: title, attributes: attributes)
+        let title = NSMutableAttributedString()
+        for (index, segment) in segments.enumerated() {
+            if index > 0 { title.append(dividerString()) }
+            title.append(segment)
+        }
+        button.attributedTitle = title
     }
 
-    // MARK: - Window Formatting
+    // MARK: - Detailed Mode Rendering
 
     private enum CountdownUnits {
         case hoursMinutes  // e.g. "3h 42m", "59m", "4h"
         case daysHours     // e.g. "3d 5h", "23h", "6d"
     }
 
-    /// Render a single window as "<label>: <pct>%".
-    /// In `.fixed` style the label is the static "5h"/"7d" and pct is used%.
-    /// In `.countdown` style the label is the time-until-reset and pct is remaining%.
-    /// Falls back to the fixed label when `resetsAt` is missing or already past.
-    private func formatWindow(
+    private var percentFont: NSFont { .monospacedDigitSystemFont(ofSize: 12, weight: .semibold) }
+    private var labelFont: NSFont { .monospacedDigitSystemFont(ofSize: 12, weight: .regular) }
+
+    /// Builds one window's `[icon] used% trailing` run.
+    /// The percentage is always the used utilization (coloured by level). The
+    /// trailing label is the time-until-reset in `.countdown` style — falling
+    /// back to the fixed "5h"/"7d" label when no reset time is known — and the
+    /// fixed label in `.fixed` style.
+    private func windowSegment(
         _ window: UsageWindow,
+        symbol: String,
         fixedLabel: String,
         style: DetailedModeStyle,
         units: CountdownUnits
-    ) -> String {
+    ) -> NSAttributedString {
+        let usage = window.utilization
+
+        let trailing: String
         switch style {
         case .fixed:
-            return "\(fixedLabel): \(Int(window.utilization))%"
+            trailing = fixedLabel
         case .countdown:
-            guard let countdown = countdownLabel(until: window.resetsAt, units: units) else {
-                return "\(fixedLabel): \(Int(window.utilization))%"
-            }
-            let remaining = max(0, 100 - Int(window.utilization.rounded()))
-            return "\(countdown): \(remaining)%"
+            trailing = countdownLabel(until: window.resetsAt, units: units) ?? fixedLabel
         }
+
+        let segment = NSMutableAttributedString()
+        segment.append(symbolString(symbol, color: .secondaryLabelColor))
+        segment.append(NSAttributedString(string: "  ", attributes: [.font: labelFont]))
+        segment.append(NSAttributedString(string: "\(Int(usage))%", attributes: [
+            .foregroundColor: ColorTheme.nsColorForUsage(usage),
+            .font: percentFont
+        ]))
+        segment.append(NSAttributedString(string: " ", attributes: [.font: labelFont]))
+        segment.append(NSAttributedString(string: trailing, attributes: [
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .font: labelFont
+        ]))
+        return segment
+    }
+
+    /// Thin vertical divider drawn between the two windows.
+    private func dividerString() -> NSAttributedString {
+        return NSAttributedString(string: "  |  ", attributes: [
+            .foregroundColor: NSColor.tertiaryLabelColor,
+            .font: labelFont
+        ])
+    }
+
+    /// Neutral placeholder title used for the no-data / loading states.
+    private func mutedTitle(_ string: String) -> NSAttributedString {
+        return NSAttributedString(string: string, attributes: [
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .font: labelFont
+        ])
+    }
+
+    /// Renders an SF Symbol as an inline, vertically-centred, tinted attachment.
+    private func symbolString(_ name: String, color: NSColor) -> NSAttributedString {
+        let attachment = NSTextAttachment()
+        let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+        if let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config) {
+            let tinted = tintedImage(symbol, color: color)
+            attachment.image = tinted
+            // Centre the glyph on the text's cap height.
+            let y = (percentFont.capHeight - tinted.size.height) / 2
+            attachment.bounds = CGRect(x: 0, y: y, width: tinted.size.width, height: tinted.size.height)
+        }
+        return NSAttributedString(attachment: attachment)
+    }
+
+    /// Returns a non-template copy of `image` filled with `color`.
+    private func tintedImage(_ image: NSImage, color: NSColor) -> NSImage {
+        let size = image.size
+        let tinted = NSImage(size: size)
+        tinted.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: size))
+        color.set()
+        NSRect(origin: .zero, size: size).fill(using: .sourceAtop)
+        tinted.unlockFocus()
+        tinted.isTemplate = false
+        return tinted
     }
 
     /// Build a collapsed countdown label from now until `resetsAt`.
@@ -239,20 +305,6 @@ class StatusItemController: NSObject {
     /// Uses ColorTheme for consistent colors across the app
     func colorForUsage(_ usage: Double) -> Color {
         return ColorTheme.colorForUsage(usage)
-    }
-
-    /// Calculate max usage from all windows
-    private func calculateMaxUsage(from data: UsageData?) -> Double {
-        guard let data = data else { return 0 }
-
-        let usages: [Double] = [
-            data.fiveHour?.utilization ?? 0,
-            data.sevenDay?.utilization ?? 0,
-            data.sevenDayOpus?.utilization ?? 0,
-            data.sevenDaySonnet?.utilization ?? 0
-        ]
-
-        return usages.max() ?? 0
     }
 
     // MARK: - Popover Toggle

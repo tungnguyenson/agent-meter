@@ -18,8 +18,8 @@ enum DisplayMode: String, Codable, CaseIterable {
 
 // MARK: - Detailed Mode Style
 enum DetailedModeStyle: String, Codable, CaseIterable {
-    case fixed = "5h: 10% | 7d: 32%"
-    case countdown = "3h 42m: 90% | 3d 5h: 68%"
+    case fixed = "12% 5h | 20% 7d"
+    case countdown = "12% 3h 46m | 20% 6d 7h"
 }
 
 // MARK: - Color Scheme
