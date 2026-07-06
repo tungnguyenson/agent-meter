@@ -1,6 +1,6 @@
 # ClaudeMeter
 
-A macOS menu bar utility to monitor your Anthropic Claude Code usage, token consumption, and limits in real-time.
+A native macOS menu bar app that monitors your Claude Code usage, token consumption, and rate limits in real-time.
 
 <p align="center">
   <img src="screenshot.png" alt="Light Mode" width="45%" />
@@ -9,37 +9,43 @@ A macOS menu bar utility to monitor your Anthropic Claude Code usage, token cons
 
 ## Features
 
-- **Real-time Monitoring**: Tracks 5-hour, 7-day, and Opus-specific usage limits
-- **Menu Bar Widget**: Shows current utilization at a glance (Icon, Compact, or Detailed modes)
-- **Notifications**: Configurable alerts when approaching limits (75%, 90%, 95%)
-- **Smart Polling**: Adaptive refresh rate based on activity and usage level
-- **Offline Caching**: View last known usage even when offline
-- **Native macOS**: Built with SwiftUI for minimal resource footprint
+- **Real-time monitoring**: Tracks 5-hour and 7-day usage windows, plus per-model limits (Opus, Sonnet, Design) and extra usage when available
+- **Menu bar widget**: Shows current utilization at a glance in three modes — Icon Only, Compact, or Detailed (with a fixed or live-countdown style)
+- **Plan detection**: Recognizes your subscription tier (Free, Pro, Max, Max 5x, Team, Enterprise)
+- **Notifications**: Configurable alerts when you approach a limit, with hysteresis and throttling to avoid repeat spam (default thresholds: 75%, 90%, 95%)
+- **Adaptive polling**: Refresh rate scales with your usage level and current activity, with a circuit breaker that backs off after repeated API failures
+- **Offline caching**: Displays your last known usage even when offline
+- **Web API fallback**: Optionally uses a web session as a backup when the OAuth API is rate limited
+- **Native macOS**: Built with SwiftUI for a minimal resource footprint
 
 ## Requirements
 
-- macOS 13.0 (Ventura) or later
-- Xcode 15.0+ (for building from source)
+- macOS 14.0 (Sonoma) or later
 - Claude Code CLI authenticated (`claude login`)
+- Xcode 15.0+ (only to build from source)
 
 ## Installation
 
-### Download Release
+### Download release
 
-1. Download the latest release from the [Releases](https://github.com/puq-ai/claude-meter/releases) page
-2. Unzip `ClaudeMeter.app`
-3. Drag to your Applications folder
-4. Launch the app
+1. Download the latest `ClaudeMeter-*.dmg` from the [Releases](https://github.com/tungnguyenson/claude-meter/releases) page
+2. Open the DMG and drag **ClaudeMeter.app** into your Applications folder
+3. Launch the app
 
-### Build from Source
+> Release builds are ad-hoc signed (not notarized), so the first launch may be blocked by Gatekeeper. If so, right-click the app and choose **Open**, then confirm.
+
+### Build from source
 
 ```bash
 # Clone the repository
-git clone https://github.com/puq-ai/claude-meter.git
-cd ClaudeMeter
+git clone https://github.com/tungnguyenson/claude-meter.git
+cd claude-meter
 
-# Build the app
-xcodebuild -scheme ClaudeMeter -configuration Release build
+# Build a release .app into ./build/Build/Products/Release/
+./scripts/build-app.sh
+
+# Or build a distributable DMG (requires: pip install dmgbuild)
+./scripts/create-dmg.sh [version]
 
 # Or open in Xcode
 open ClaudeMeter.xcodeproj
@@ -47,49 +53,64 @@ open ClaudeMeter.xcodeproj
 
 ## Configuration
 
-ClaudeMeter uses credentials stored by the Claude Code CLI. Ensure you've authenticated:
+ClaudeMeter reads the OAuth credentials that the Claude Code CLI stores in your system keychain, so no separate sign-in is needed. Just make sure you're authenticated:
 
 ```bash
 claude login
 ```
 
-Once logged in, ClaudeMeter will automatically detect your session.
+Once logged in, ClaudeMeter automatically detects your session. See [docs/authentication.md](docs/authentication.md) for how credential lookup and the web fallback work.
 
 ### Settings
 
-Access settings from the menu bar popover:
+Open settings from the menu bar popover:
 
-- **General**: Launch at login, dock visibility, refresh interval
-- **Appearance**: Display mode (Icon/Compact/Detailed), color scheme
-- **Notifications**: Enable/disable alerts, configure thresholds
+- **General**: Launch at login, show in Dock, refresh interval (30 seconds to 1 hour), and Web API fallback credentials
+- **Appearance**: Menu bar display mode (Icon Only / Compact / Detailed) and color scheme (Auto / Light / Dark)
+- **Notifications**: Enable/disable alerts and configure the alert thresholds
 - **About**: App version and information
 
 ## Architecture
 
+Three strictly separated layers:
+
 ```
 ClaudeMeter/
-├── Core/
-│   ├── Constants.swift          # Centralized configuration
-│   ├── DependencyContainer.swift # Dependency injection
-│   ├── Protocols/               # Service abstractions
-│   ├── Models/                  # Data models
-│   ├── Services/                # API, Keychain, Notifications
-│   └── Managers/                # Business logic
-├── UI/
-│   ├── MenuBar/                 # Status bar components
-│   ├── Popover/                 # Main UI views
-│   ├── Settings/                # Settings views
-│   └── Components/              # Reusable components
-└── Extensions/                  # Swift extensions
+├── App/                          # Lifecycle: entry point, menu bar, central AppState
+├── Core/                         # Business logic (no SwiftUI)
+│   ├── Constants.swift           # Endpoints, thresholds, timeouts, intervals
+│   ├── DependencyContainer.swift # Service locator for dependency injection
+│   ├── Protocols/                # Service abstractions (enable mock injection)
+│   ├── Models/                   # UsageData, AppSettings, SubscriptionType, …
+│   ├── Services/                 # API, Keychain, Notifications, version resolver
+│   └── Managers/                 # Usage, Polling, Cache
+├── UI/                           # SwiftUI views
+│   ├── MenuBar/                  # Status item rendering
+│   ├── Popover/                  # Main usage display
+│   ├── Settings/                 # Preferences
+│   └── Components/               # Reusable views
+└── Extensions/                   # Swift extensions
 ```
 
-### Key Components
+### Key components
 
-- **APIService**: Handles communication with Anthropic API with retry logic
-- **KeychainService**: Reads Claude Code credentials from system keychain
-- **NotificationService**: Manages system notifications with throttling
-- **PollingManager**: Adaptive polling based on usage levels
-- **CacheManager**: Offline caching of usage data
+- **APIService**: Communicates with the Anthropic API, with retry and backoff
+- **KeychainService**: Reads Claude Code OAuth credentials from the system keychain
+- **NotificationService**: System notifications with a threshold buffer and throttling
+- **PollingManager**: Adaptive polling with a failure circuit breaker and network-wake recovery
+- **CacheManager**: Offline caching of usage data in `~/Library/Caches/ClaudeMeter/`
+
+## Development
+
+```bash
+# Run all tests
+xcodebuild test -scheme ClaudeMeter
+
+# Run a single test class
+xcodebuild test -scheme ClaudeMeter -only-testing ClaudeMeterTests/UsageManagerTests
+```
+
+Pushes to `main` trigger the [Build DMG](.github/workflows/build-dmg.yml) GitHub Action, which builds the app, packages a DMG, and publishes it as a prerelease.
 
 ## Contributing
 
@@ -97,7 +118,7 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for gu
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
