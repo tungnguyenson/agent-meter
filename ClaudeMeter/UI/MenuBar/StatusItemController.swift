@@ -374,3 +374,23 @@ class StatusItemController: NSObject {
         }
     }
 }
+
+// MARK: - Menu Bar Color Palette
+
+/// Resolves the icon and text colors for the Detailed menu-bar mode.
+/// When custom colors are disabled the app falls back to the adaptive
+/// `.secondaryLabelColor` — its original appearance.
+struct MenuBarColorPalette {
+    let icon: NSColor
+    let text: NSColor
+
+    static func resolve(from settings: AppSettings) -> MenuBarColorPalette {
+        guard settings.customMenuBarColorsEnabled else {
+            return MenuBarColorPalette(icon: .secondaryLabelColor, text: .secondaryLabelColor)
+        }
+        return MenuBarColorPalette(
+            icon: NSColor(Color(hex: settings.menuBarIconColorHex)),
+            text: NSColor(Color(hex: settings.menuBarTextColorHex))
+        )
+    }
+}

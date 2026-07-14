@@ -53,3 +53,29 @@ final class AppSettingsColorFieldTests: XCTestCase {
         XCTAssertEqual(decoded.menuBarTextColorHex, "#FFFFFF")
     }
 }
+
+// MARK: - MenuBarColorPalette
+
+final class MenuBarColorPaletteTests: XCTestCase {
+    func test_resolve_whenDisabled_usesSecondaryLabelColor() {
+        var settings = AppSettings()
+        settings.customMenuBarColorsEnabled = false
+
+        let palette = MenuBarColorPalette.resolve(from: settings)
+
+        XCTAssertEqual(palette.icon, NSColor.secondaryLabelColor)
+        XCTAssertEqual(palette.text, NSColor.secondaryLabelColor)
+    }
+
+    func test_resolve_whenEnabled_usesConfiguredHexColors() {
+        var settings = AppSettings()
+        settings.customMenuBarColorsEnabled = true
+        settings.menuBarIconColorHex = "#FF0000"
+        settings.menuBarTextColorHex = "#00FF00"
+
+        let palette = MenuBarColorPalette.resolve(from: settings)
+
+        XCTAssertEqual(Color(nsColor: palette.icon).hexString, "#FF0000")
+        XCTAssertEqual(Color(nsColor: palette.text).hexString, "#00FF00")
+    }
+}
