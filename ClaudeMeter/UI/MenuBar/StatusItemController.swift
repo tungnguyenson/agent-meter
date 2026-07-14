@@ -99,8 +99,10 @@ class StatusItemController: NSObject {
 
     /// Renders each window as `[icon] used% trailing`, matching the reference
     /// menu-bar design: the percentage takes the usage colour, while the icon
-    /// and trailing label sit in a muted secondary tone. A thin vertical
-    /// divider separates the 5-hour (clock) and 7-day (calendar) windows.
+    /// and trailing label take the resolved `palette` colours — the muted
+    /// secondary tone by default, or the user's custom icon/text colours when
+    /// enabled in Appearance settings. A thin vertical divider separates the
+    /// 5-hour (clock) and 7-day (calendar) windows.
     private func updateDetailedMode(button: NSStatusBarButton, data: UsageData?, style: DetailedModeStyle, palette: MenuBarColorPalette) {
         button.image = nil
 
