@@ -40,8 +40,8 @@ enum AppColorScheme: String, Codable, CaseIterable {
 // MARK: - App Settings
 struct AppSettings: Codable, Equatable {
     // Display
-    var displayMode: DisplayMode = .compact
-    var detailedModeStyle: DetailedModeStyle = .fixed
+    var displayMode: DisplayMode = .detailed
+    var detailedModeStyle: DetailedModeStyle = .countdown
     var colorScheme: AppColorScheme = .auto
     var showInDock: Bool = false
     var showSonnetLimit: Bool = false
@@ -64,6 +64,7 @@ struct AppSettings: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case displayMode
+        case detailedModeStyle
         case colorScheme
         case showInDock
         case showSonnetLimit
@@ -84,6 +85,7 @@ struct AppSettings: Codable, Equatable {
         let defaults = AppSettings()
 
         displayMode = try container.decodeIfPresent(DisplayMode.self, forKey: .displayMode) ?? defaults.displayMode
+        detailedModeStyle = try container.decodeIfPresent(DetailedModeStyle.self, forKey: .detailedModeStyle) ?? defaults.detailedModeStyle
         colorScheme = try container.decodeIfPresent(AppColorScheme.self, forKey: .colorScheme) ?? defaults.colorScheme
         showInDock = try container.decodeIfPresent(Bool.self, forKey: .showInDock) ?? defaults.showInDock
         showSonnetLimit = try container.decodeIfPresent(Bool.self, forKey: .showSonnetLimit) ?? defaults.showSonnetLimit
