@@ -118,7 +118,7 @@ enum Constants {
         static let maxRefreshInterval = 3600
 
         // Defaults
-        static let defaultRefreshInterval = 30
+        static let defaultRefreshInterval = 300
         static let defaultNotifyThresholds: [Int] = [75, 90, 95]
     }
 

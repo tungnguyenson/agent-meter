@@ -19,11 +19,71 @@ struct DebugLogView: View {
         return f
     }()
 
+    private enum LogStatus {
+        case pending
+        case success
+        case error
+
+        var label: String {
+            switch self {
+            case .pending: return "PENDING"
+            case .success: return "SUCCESS"
+            case .error: return "ERROR"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .pending: return .secondary
+            case .success: return .green
+            case .error: return .red
+            }
+        }
+    }
+
+    private struct LogRow: Identifiable {
+        let id: UUID
+        var timestamp: Date
+        let apiCall: String
+        var status: LogStatus
+    }
+
+    private var logRows: [LogRow] {
+        var rows: [LogRow] = []
+
+        for entry in logger.entries {
+            guard let apiCall = apiCall(from: entry.message) else { continue }
+
+            switch entry.category {
+            case .request, .fallback:
+                rows.append(LogRow(id: entry.id, timestamp: entry.timestamp, apiCall: apiCall, status: .pending))
+            case .response, .error:
+                if let index = rows.indices.reversed().first(where: {
+                    rows[$0].apiCall == apiCall && rows[$0].status == .pending
+                }) {
+                    rows[index].timestamp = entry.timestamp
+                    rows[index].status = entry.category == .response ? .success : .error
+                } else {
+                    rows.append(LogRow(
+                        id: entry.id,
+                        timestamp: entry.timestamp,
+                        apiCall: apiCall,
+                        status: entry.category == .response ? .success : .error
+                    ))
+                }
+            case .cache, .info:
+                continue
+            }
+        }
+
+        return rows
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             headerView
 
-            if logger.entries.isEmpty {
+            if logRows.isEmpty {
                 emptyStateView
             } else {
                 logList
@@ -76,52 +136,32 @@ struct DebugLogView: View {
     private var logList: some View {
         ScrollView {
             LazyVStack(spacing: 1) {
-                ForEach(logger.entries.reversed()) { entry in
-                    logEntryRow(entry)
+                ForEach(logRows.reversed()) { row in
+                    logEntryRow(row)
                 }
             }
             .padding(.horizontal)
         }
     }
 
-    private func logEntryRow(_ entry: DebugLogEntry) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: entry.category.icon)
-                .foregroundColor(colorFor(entry.category))
-                .font(.system(size: 14))
-                .frame(width: 20)
-                .padding(.top, 2)
+    private func logEntryRow(_ row: LogRow) -> some View {
+        HStack(spacing: 10) {
+            Text(Self.timeFormatter.string(from: row.timestamp))
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(entry.category.rawValue)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(colorFor(entry.category).opacity(0.1))
-                        .foregroundColor(colorFor(entry.category))
-                        .cornerRadius(3)
+            Text(row.apiCall)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
 
-                    Spacer()
+            Spacer(minLength: 0)
 
-                    Text(Self.timeFormatter.string(from: entry.timestamp))
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                }
-
-                Text(entry.message)
-                    .font(.system(size: 12))
-                    .foregroundColor(.primary)
-
-                if let detail = entry.detail {
-                    Text(detail)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-            }
+            Text(row.status.label)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(row.status.color)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 8)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
         .background(Color.primary.opacity(0.03))
         .cornerRadius(6)
         .padding(.vertical, 2)
@@ -147,7 +187,7 @@ struct DebugLogView: View {
     // MARK: - Footer
     private var footerView: some View {
         HStack {
-            Text("\(logger.entries.count) entries")
+            Text("\(logRows.count) calls")
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
             Spacer()
@@ -163,29 +203,22 @@ struct DebugLogView: View {
         .background(Color.primary.opacity(0.05))
     }
 
-    private func colorFor(_ category: DebugLogEntry.Category) -> Color {
-        switch category {
-        case .request: return .blue
-        case .response: return .green
-        case .fallback: return .orange
-        case .cache: return .purple
-        case .error: return .red
-        case .info: return .secondary
-        }
+    private func apiCall(from message: String) -> String? {
+        guard message.hasPrefix("API: ") else { return nil }
+
+        let call = String(message.dropFirst(5))
+            .replacingOccurrences(of: " SUCCESS", with: "")
+            .replacingOccurrences(of: " FAILED", with: "")
+        return call.isEmpty ? nil : call
     }
 
     private func copyAllLogs() {
-        let text = logger.entries.map { entry in
-            let time = Self.timeFormatter.string(from: entry.timestamp)
-            var line = "[\(time)] [\(entry.category.rawValue)] \(entry.message)"
-            if let detail = entry.detail {
-                line += "\n  \(detail)"
-            }
-            return line
+        let text = logRows.map { row in
+            let time = Self.timeFormatter.string(from: row.timestamp)
+            return "[\(time)] \(row.apiCall) \(row.status.label)"
         }.joined(separator: "\n")
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
     }
 }
-

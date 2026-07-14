@@ -226,7 +226,7 @@ final class AppSettingsTests: XCTestCase {
 
         XCTAssertEqual(settings.displayMode, .detailed)
         XCTAssertEqual(settings.detailedModeStyle, .countdown)
-        XCTAssertEqual(settings.refreshInterval, 30)
+        XCTAssertEqual(settings.refreshInterval, 300)
         XCTAssertFalse(settings.launchAtLogin)
         XCTAssertTrue(settings.notificationsEnabled)
         XCTAssertEqual(settings.notifyAt, [75, 90, 95])
