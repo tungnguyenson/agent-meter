@@ -40,9 +40,13 @@ extension Color {
 
     /// Convert to hex string
     var hexString: String {
-        guard let components = NSColor(self).cgColor.components else {
+        // Force sRGB so we always get 4 RGBA components. Colors from
+        // ColorPicker (e.g. pure white/black) can be in a grayscale space
+        // with only 2 components, which would crash a raw [2] index.
+        guard let srgb = NSColor(self).usingColorSpace(.sRGB) else {
             return "#000000"
         }
+        let components = srgb.cgColor.components ?? [0, 0, 0, 1]
 
         let r = Int(components[0] * 255)
         let g = Int(components[1] * 255)
