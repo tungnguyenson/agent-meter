@@ -24,3 +24,32 @@ final class ColorHexStringTests: XCTestCase {
         XCTAssertEqual(black.hexString, "#000000")
     }
 }
+
+// MARK: - AppSettings color fields
+
+final class AppSettingsColorFieldTests: XCTestCase {
+    func test_encodeDecode_roundTripsCustomColorFields() throws {
+        var settings = AppSettings()
+        settings.customMenuBarColorsEnabled = true
+        settings.menuBarIconColorHex = "#112233"
+        settings.menuBarTextColorHex = "#AABBCC"
+
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+
+        XCTAssertTrue(decoded.customMenuBarColorsEnabled)
+        XCTAssertEqual(decoded.menuBarIconColorHex, "#112233")
+        XCTAssertEqual(decoded.menuBarTextColorHex, "#AABBCC")
+    }
+
+    func test_decode_missingColorKeys_usesDefaults() throws {
+        // JSON persisted by an older build without the new keys.
+        let json = Data(#"{"displayMode":"Compact"}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: json)
+
+        XCTAssertFalse(decoded.customMenuBarColorsEnabled)
+        XCTAssertEqual(decoded.menuBarIconColorHex, "#FFFFFF")
+        XCTAssertEqual(decoded.menuBarTextColorHex, "#FFFFFF")
+    }
+}
