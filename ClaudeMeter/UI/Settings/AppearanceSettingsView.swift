@@ -12,6 +12,20 @@ import SwiftUI
 struct AppearanceSettingsView: View {
     @ObservedObject var appState: AppState
 
+    private var iconColorBinding: Binding<Color> {
+        Binding(
+            get: { Color(hex: appState.settings.menuBarIconColorHex) },
+            set: { appState.settings.menuBarIconColorHex = $0.hexString }
+        )
+    }
+
+    private var textColorBinding: Binding<Color> {
+        Binding(
+            get: { Color(hex: appState.settings.menuBarTextColorHex) },
+            set: { appState.settings.menuBarTextColorHex = $0.hexString }
+        )
+    }
+
     var body: some View {
         SettingsTabContainer {
             Form {
@@ -41,6 +55,21 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                }
+
+                if appState.settings.displayMode == .detailed {
+                    Section(header: Text("Menu Bar Colors")) {
+                        Toggle("Custom icon & text colors", isOn: $appState.settings.customMenuBarColorsEnabled)
+
+                        if appState.settings.customMenuBarColorsEnabled {
+                            ColorPicker("Icon color", selection: iconColorBinding, supportsOpacity: false)
+                            ColorPicker("Text color", selection: textColorBinding, supportsOpacity: false)
+                        }
+
+                        Text("Applies to Detailed mode. The percentage still changes color by usage level.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .formStyle(.grouped)
