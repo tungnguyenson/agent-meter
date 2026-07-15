@@ -79,3 +79,23 @@ final class MenuBarColorPaletteTests: XCTestCase {
         XCTAssertEqual(Color(nsColor: palette.text).hexString, "#00FF00")
     }
 }
+
+// MARK: - MenuBarHex.normalize
+
+final class MenuBarHexTests: XCTestCase {
+    func test_normalize_lowercaseNoHash_returnsCanonical() {
+        XCTAssertEqual(MenuBarHex.normalize("00e5ff"), "#00E5FF")
+    }
+    func test_normalize_withHashAndWhitespace_returnsCanonical() {
+        XCTAssertEqual(MenuBarHex.normalize("  #aabbcc  "), "#AABBCC")
+    }
+    func test_normalize_alreadyCanonical_isStable() {
+        XCTAssertEqual(MenuBarHex.normalize("#FFFFFF"), "#FFFFFF")
+    }
+    func test_normalize_invalidInputs_returnNil() {
+        XCTAssertNil(MenuBarHex.normalize("xyz"))
+        XCTAssertNil(MenuBarHex.normalize("12345"))    // too short
+        XCTAssertNil(MenuBarHex.normalize("1234567"))  // too long
+        XCTAssertNil(MenuBarHex.normalize("GGGGGG"))   // non-hex letters
+    }
+}

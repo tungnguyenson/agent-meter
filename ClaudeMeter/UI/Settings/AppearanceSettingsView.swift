@@ -8,23 +8,89 @@
 
 import SwiftUI
 
+// MARK: - MenuBarHex
+
+enum MenuBarHex {
+    /// Normalizes user hex input to canonical "#RRGGBB" (uppercase), or nil if invalid.
+    /// Accepts optional leading '#', surrounding whitespace; requires exactly 6 hex digits.
+    static func normalize(_ input: String) -> String? {
+        let cleaned = input
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "#", with: "")
+            .uppercased()
+        guard cleaned.count == 6, cleaned.allSatisfy(\.isHexDigit) else { return nil }
+        return "#\(cleaned)"
+    }
+}
+
+private let menuBarColorPresets: [String] = [
+    "#FFFFFF", "#B3B3B3", "#000000", "#FF3B30",
+    "#FF9500", "#34C759", "#0A84FF", "#AF52DE",
+]
+
+// MARK: - ColorSwatchField
+
+private struct ColorSwatchField: View {
+    let title: String
+    @Binding var hex: String
+
+    @State private var draftHex: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                Spacer()
+                Circle()
+                    .fill(Color(hex: hex))
+                    .frame(width: 16, height: 16)
+                    .overlay(Circle().stroke(Color.primary.opacity(0.15), lineWidth: 0.5))
+                TextField("#RRGGBB", text: $draftHex)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 90)
+                    .font(.system(.body, design: .monospaced))
+                    .onSubmit(commitDraft)
+            }
+
+            HStack(spacing: 8) {
+                ForEach(menuBarColorPresets, id: \.self) { preset in
+                    let isSelected = MenuBarHex.normalize(hex) == preset
+                    Circle()
+                        .fill(Color(hex: preset))
+                        .frame(width: 22, height: 22)
+                        .overlay(
+                            Circle().stroke(
+                                isSelected ? Color.accentColor : Color.primary.opacity(0.15),
+                                lineWidth: isSelected ? 2 : 0.5
+                            )
+                        )
+                        .contentShape(Circle())
+                        .help(preset)
+                        .onTapGesture {
+                            hex = preset
+                            draftHex = preset
+                        }
+                }
+            }
+        }
+        .onAppear {
+            draftHex = hex
+        }
+    }
+
+    private func commitDraft() {
+        if let normalized = MenuBarHex.normalize(draftHex) {
+            hex = normalized
+            draftHex = normalized
+        } else {
+            draftHex = hex
+        }
+    }
+}
+
 // MARK: - Appearance Settings
 struct AppearanceSettingsView: View {
     @ObservedObject var appState: AppState
-
-    private var iconColorBinding: Binding<Color> {
-        Binding(
-            get: { Color(hex: appState.settings.menuBarIconColorHex) },
-            set: { appState.settings.menuBarIconColorHex = $0.hexString }
-        )
-    }
-
-    private var textColorBinding: Binding<Color> {
-        Binding(
-            get: { Color(hex: appState.settings.menuBarTextColorHex) },
-            set: { appState.settings.menuBarTextColorHex = $0.hexString }
-        )
-    }
 
     var body: some View {
         SettingsTabContainer {
@@ -62,8 +128,8 @@ struct AppearanceSettingsView: View {
                         Toggle("Custom icon & text colors", isOn: $appState.settings.customMenuBarColorsEnabled)
 
                         if appState.settings.customMenuBarColorsEnabled {
-                            ColorPicker("Icon color", selection: iconColorBinding, supportsOpacity: false)
-                            ColorPicker("Text color", selection: textColorBinding, supportsOpacity: false)
+                            ColorSwatchField(title: "Icon color", hex: $appState.settings.menuBarIconColorHex)
+                            ColorSwatchField(title: "Text color", hex: $appState.settings.menuBarTextColorHex)
                         }
 
                         Text("Applies to Detailed mode. The percentage still changes color by usage level.")
