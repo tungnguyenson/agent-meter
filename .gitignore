@@ -42,3 +42,5 @@ Package.resolved
 *.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 .claude
 CLAUDE.md
+.superpowers
+docs/superpowers

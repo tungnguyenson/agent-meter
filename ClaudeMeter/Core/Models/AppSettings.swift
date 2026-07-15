@@ -47,6 +47,9 @@ struct AppSettings: Codable, Equatable {
     var showSonnetLimit: Bool = false
     var showDesignLimit: Bool = true
     var showExtraUsage: Bool = false
+    var customMenuBarColorsEnabled: Bool = false
+    var menuBarIconColorHex: String = "#FFFFFF"
+    var menuBarTextColorHex: String = "#FFFFFF"
 
     // Polling
     var refreshInterval: Int = Constants.Settings.defaultRefreshInterval
@@ -70,6 +73,9 @@ struct AppSettings: Codable, Equatable {
         case showSonnetLimit
         case showDesignLimit
         case showExtraUsage
+        case customMenuBarColorsEnabled
+        case menuBarIconColorHex
+        case menuBarTextColorHex
         case refreshInterval
         case launchAtLogin
         case notifyAt
@@ -91,6 +97,9 @@ struct AppSettings: Codable, Equatable {
         showSonnetLimit = try container.decodeIfPresent(Bool.self, forKey: .showSonnetLimit) ?? defaults.showSonnetLimit
         showDesignLimit = try container.decodeIfPresent(Bool.self, forKey: .showDesignLimit) ?? defaults.showDesignLimit
         showExtraUsage = try container.decodeIfPresent(Bool.self, forKey: .showExtraUsage) ?? defaults.showExtraUsage
+        customMenuBarColorsEnabled = try container.decodeIfPresent(Bool.self, forKey: .customMenuBarColorsEnabled) ?? defaults.customMenuBarColorsEnabled
+        menuBarIconColorHex = try container.decodeIfPresent(String.self, forKey: .menuBarIconColorHex) ?? defaults.menuBarIconColorHex
+        menuBarTextColorHex = try container.decodeIfPresent(String.self, forKey: .menuBarTextColorHex) ?? defaults.menuBarTextColorHex
         refreshInterval = try container.decodeIfPresent(Int.self, forKey: .refreshInterval) ?? defaults.refreshInterval
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? defaults.launchAtLogin
         notifyAt = try container.decodeIfPresent([Int].self, forKey: .notifyAt) ?? defaults.notifyAt

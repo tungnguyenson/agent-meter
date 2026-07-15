@@ -86,7 +86,8 @@ class StatusItemController: NSObject {
         case .compact:
             updateCompactMode(button: button, usage: fiveHourUsage, color: fiveHourColor)
         case .detailed:
-            updateDetailedMode(button: button, data: data, style: settings.detailedModeStyle)
+            let palette = MenuBarColorPalette.resolve(from: settings)
+            updateDetailedMode(button: button, data: data, style: settings.detailedModeStyle, palette: palette)
         }
     }
 
@@ -107,34 +108,52 @@ class StatusItemController: NSObject {
 
     /// Renders each window as `[icon] used% trailing`, matching the reference
     /// menu-bar design: the percentage takes the usage colour, while the icon
-    /// and trailing label sit in a muted secondary tone. A thin vertical
-    /// divider separates the 5-hour (clock) and 7-day (calendar) windows.
-    private func updateDetailedMode(button: NSStatusBarButton, data: UsageData?, style: DetailedModeStyle) {
+    /// and trailing label take the resolved `palette` colours — the muted
+    /// secondary tone by default, or the user's custom icon/text colours when
+    /// enabled in Appearance settings. A thin vertical divider separates the
+    /// 5-hour (clock) and 7-day (calendar) windows.
+    private func updateDetailedMode(button: NSStatusBarButton, data: UsageData?, style: DetailedModeStyle, palette: MenuBarColorPalette) {
         button.image = nil
 
         guard let data = data else {
-            button.attributedTitle = mutedTitle("-- | --")
+            button.attributedTitle = mutedTitle("-- | --", color: palette.text)
             return
         }
 
         var segments: [NSAttributedString] = []
 
         if let fiveHour = data.fiveHour {
-            segments.append(windowSegment(fiveHour, symbol: "clock", fixedLabel: "5h", style: style, units: .hoursMinutes, duration: Constants.Window.fiveHourDuration))
+            segments.append(windowSegment(
+                fiveHour,
+                symbol: "clock",
+                fixedLabel: "5h",
+                style: style,
+                units: .hoursMinutes,
+                duration: Constants.Window.fiveHourDuration,
+                palette: palette
+            ))
         }
 
         if let sevenDay = data.sevenDay {
-            segments.append(windowSegment(sevenDay, symbol: "calendar", fixedLabel: "7d", style: style, units: .daysHours, duration: Constants.Window.sevenDayDuration))
+            segments.append(windowSegment(
+                sevenDay,
+                symbol: "calendar",
+                fixedLabel: "7d",
+                style: style,
+                units: .daysHours,
+                duration: Constants.Window.sevenDayDuration,
+                palette: palette
+            ))
         }
 
         guard !segments.isEmpty else {
-            button.attributedTitle = mutedTitle("No data")
+            button.attributedTitle = mutedTitle("No data", color: palette.text)
             return
         }
 
         let title = NSMutableAttributedString()
         for (index, segment) in segments.enumerated() {
-            if index > 0 { title.append(dividerString()) }
+            if index > 0 { title.append(dividerString(color: palette.text)) }
             title.append(segment)
         }
         button.attributedTitle = title
@@ -161,7 +180,8 @@ class StatusItemController: NSObject {
         fixedLabel: String,
         style: DetailedModeStyle,
         units: CountdownUnits,
-        duration: TimeInterval
+        duration: TimeInterval,
+        palette: MenuBarColorPalette
     ) -> NSAttributedString {
         let usage = window.utilization
         let forecast = WindowForecast.make(utilization: usage, resetsAt: window.resetsAt, duration: duration)
@@ -176,7 +196,7 @@ class StatusItemController: NSObject {
         }
 
         let segment = NSMutableAttributedString()
-        segment.append(symbolString(symbol, color: .secondaryLabelColor))
+        segment.append(symbolString(symbol, color: palette.icon))
         segment.append(NSAttributedString(string: "  ", attributes: [.font: labelFont]))
         segment.append(NSAttributedString(string: "\(Int(usage))%", attributes: [
             .foregroundColor: percentColor,
@@ -184,24 +204,24 @@ class StatusItemController: NSObject {
         ]))
         segment.append(NSAttributedString(string: " ", attributes: [.font: labelFont]))
         segment.append(NSAttributedString(string: trailing, attributes: [
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: palette.text,
             .font: labelFont
         ]))
         return segment
     }
 
     /// Thin vertical divider drawn between the two windows.
-    private func dividerString() -> NSAttributedString {
+    private func dividerString(color: NSColor) -> NSAttributedString {
         return NSAttributedString(string: "  |  ", attributes: [
-            .foregroundColor: NSColor.tertiaryLabelColor,
+            .foregroundColor: color.withAlphaComponent(0.5),
             .font: labelFont
         ])
     }
 
     /// Neutral placeholder title used for the no-data / loading states.
-    private func mutedTitle(_ string: String) -> NSAttributedString {
+    private func mutedTitle(_ string: String, color: NSColor) -> NSAttributedString {
         return NSAttributedString(string: string, attributes: [
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: color,
             .font: labelFont
         ])
     }
@@ -376,5 +396,25 @@ class StatusItemController: NSObject {
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
         }
+    }
+}
+
+// MARK: - Menu Bar Color Palette
+
+/// Resolves the icon and text colors for the Detailed menu-bar mode.
+/// When custom colors are disabled the app falls back to the adaptive
+/// `.secondaryLabelColor` — its original appearance.
+struct MenuBarColorPalette {
+    let icon: NSColor
+    let text: NSColor
+
+    static func resolve(from settings: AppSettings) -> MenuBarColorPalette {
+        guard settings.customMenuBarColorsEnabled else {
+            return MenuBarColorPalette(icon: .secondaryLabelColor, text: .secondaryLabelColor)
+        }
+        return MenuBarColorPalette(
+            icon: NSColor(Color(hex: settings.menuBarIconColorHex)),
+            text: NSColor(Color(hex: settings.menuBarTextColorHex))
+        )
     }
 }
