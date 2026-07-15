@@ -68,14 +68,23 @@ class StatusItemController: NSObject {
     private func updateMenuBarDisplay(with data: UsageData?, settings: AppSettings) {
         guard let button = statusItem?.button else { return }
 
-        // Use 5-hour usage for menu bar display
-        let fiveHourUsage = data?.fiveHour?.utilization ?? 0
+        // Use the 5-hour window for the single-value menu bar modes.
+        let fiveHour = data?.fiveHour
+        let fiveHourUsage = fiveHour?.utilization ?? 0
+        let fiveHourColor = ColorTheme.color(
+            for: WindowForecast.make(
+                utilization: fiveHourUsage,
+                resetsAt: fiveHour?.resetsAt,
+                duration: Constants.Window.fiveHourDuration
+            ),
+            fallbackUsage: fiveHourUsage
+        )
 
         switch settings.displayMode {
         case .iconOnly:
-            updateIconOnlyMode(button: button, usage: fiveHourUsage)
+            updateIconOnlyMode(button: button, usage: fiveHourUsage, color: fiveHourColor)
         case .compact:
-            updateCompactMode(button: button, usage: fiveHourUsage)
+            updateCompactMode(button: button, usage: fiveHourUsage, color: fiveHourColor)
         case .detailed:
             let palette = MenuBarColorPalette.resolve(from: settings)
             updateDetailedMode(button: button, data: data, style: settings.detailedModeStyle, palette: palette)
@@ -83,14 +92,14 @@ class StatusItemController: NSObject {
     }
 
     // MARK: - Icon Only Mode
-    private func updateIconOnlyMode(button: NSStatusBarButton, usage: Double) {
+    private func updateIconOnlyMode(button: NSStatusBarButton, usage: Double, color: Color) {
         button.title = ""
-        button.image = createProgressIcon(progress: usage / 100.0, color: colorForUsage(usage))
+        button.image = createProgressIcon(progress: usage / 100.0, color: color)
     }
 
     // MARK: - Compact Mode (Icon + Percentage)
-    private func updateCompactMode(button: NSStatusBarButton, usage: Double) {
-        button.image = createProgressIcon(progress: usage / 100.0, color: colorForUsage(usage))
+    private func updateCompactMode(button: NSStatusBarButton, usage: Double, color: Color) {
+        button.image = createProgressIcon(progress: usage / 100.0, color: color)
         button.title = String(format: " %.0f%%", usage)
         button.imagePosition = .imageLeading
     }
@@ -114,11 +123,27 @@ class StatusItemController: NSObject {
         var segments: [NSAttributedString] = []
 
         if let fiveHour = data.fiveHour {
-            segments.append(windowSegment(fiveHour, symbol: "clock", fixedLabel: "5h", style: style, units: .hoursMinutes, palette: palette))
+            segments.append(windowSegment(
+                fiveHour,
+                symbol: "clock",
+                fixedLabel: "5h",
+                style: style,
+                units: .hoursMinutes,
+                duration: Constants.Window.fiveHourDuration,
+                palette: palette
+            ))
         }
 
         if let sevenDay = data.sevenDay {
-            segments.append(windowSegment(sevenDay, symbol: "calendar", fixedLabel: "7d", style: style, units: .daysHours, palette: palette))
+            segments.append(windowSegment(
+                sevenDay,
+                symbol: "calendar",
+                fixedLabel: "7d",
+                style: style,
+                units: .daysHours,
+                duration: Constants.Window.sevenDayDuration,
+                palette: palette
+            ))
         }
 
         guard !segments.isEmpty else {
@@ -155,9 +180,12 @@ class StatusItemController: NSObject {
         fixedLabel: String,
         style: DetailedModeStyle,
         units: CountdownUnits,
+        duration: TimeInterval,
         palette: MenuBarColorPalette
     ) -> NSAttributedString {
         let usage = window.utilization
+        let forecast = WindowForecast.make(utilization: usage, resetsAt: window.resetsAt, duration: duration)
+        let percentColor = ColorTheme.nsColor(for: forecast, fallbackUsage: usage)
 
         let trailing: String
         switch style {
@@ -171,7 +199,7 @@ class StatusItemController: NSObject {
         segment.append(symbolString(symbol, color: palette.icon))
         segment.append(NSAttributedString(string: "  ", attributes: [.font: labelFont]))
         segment.append(NSAttributedString(string: "\(Int(usage))%", attributes: [
-            .foregroundColor: ColorTheme.nsColorForUsage(usage),
+            .foregroundColor: percentColor,
             .font: percentFont
         ]))
         segment.append(NSAttributedString(string: " ", attributes: [.font: labelFont]))
@@ -301,14 +329,6 @@ class StatusItemController: NSObject {
 
         image.isTemplate = false
         return image
-    }
-
-    // MARK: - Color Helpers
-
-    /// Returns appropriate color based on usage percentage
-    /// Uses ColorTheme for consistent colors across the app
-    func colorForUsage(_ usage: Double) -> Color {
-        return ColorTheme.colorForUsage(usage)
     }
 
     // MARK: - Popover Toggle

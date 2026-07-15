@@ -100,13 +100,7 @@ struct PopoverView: View {
                 .accessibilityLabel("Loading usage data")
 
             Button(action: {
-                guard !isRefreshDisabled else { return }
-                isRefreshDisabled = true
-                Task {
-                    await appState.refresh(reason: "manual_refresh")
-                    try? await Task.sleep(nanoseconds: UInt64(Constants.RateLimit.manualRefreshDebounce * 1_000_000_000))
-                    isRefreshDisabled = false
-                }
+                triggerRefresh(reason: "manual_refresh")
             }) {
                 Image(systemName: "arrow.clockwise")
             }
@@ -176,7 +170,8 @@ struct PopoverView: View {
                     UsageCardView(
                         title: "5-Hour Limit",
                         usage: fiveHour.utilization,
-                        resetsAt: fiveHour.resetsAt
+                        resetsAt: fiveHour.resetsAt,
+                        windowDuration: Constants.Window.fiveHourDuration
                     )
                 }
 
@@ -184,7 +179,8 @@ struct PopoverView: View {
                     UsageCardView(
                         title: "7-Day Limit",
                         usage: sevenDay.utilization,
-                        resetsAt: sevenDay.resetsAt
+                        resetsAt: sevenDay.resetsAt,
+                        windowDuration: Constants.Window.sevenDayDuration
                     )
                 }
 
@@ -192,7 +188,8 @@ struct PopoverView: View {
                     UsageCardView(
                         title: "Sonnet Only",
                         usage: sonnet.utilization,
-                        resetsAt: sonnet.resetsAt
+                        resetsAt: sonnet.resetsAt,
+                        windowDuration: Constants.Window.sevenDayDuration
                     )
                 }
 
@@ -200,7 +197,8 @@ struct PopoverView: View {
                     UsageCardView(
                         title: "Claude Design",
                         usage: design.utilization,
-                        resetsAt: design.resetsAt
+                        resetsAt: design.resetsAt,
+                        windowDuration: Constants.Window.sevenDayDuration
                     )
                 }
 
@@ -280,13 +278,7 @@ struct PopoverView: View {
                 .multilineTextAlignment(.center)
 
             Button("Refresh") {
-                guard !isRefreshDisabled else { return }
-                isRefreshDisabled = true
-                Task {
-                    await appState.refresh(reason: "empty_state_refresh")
-                    try? await Task.sleep(nanoseconds: UInt64(Constants.RateLimit.manualRefreshDebounce * 1_000_000_000))
-                    isRefreshDisabled = false
-                }
+                triggerRefresh(reason: "empty_state_refresh")
             }
             .buttonStyle(.bordered)
             .disabled(isRefreshDisabled)
@@ -299,11 +291,7 @@ struct PopoverView: View {
     // MARK: - Footer
 
     private var footerView: some View {
-        // Re-render once per second so the relative "Updated … ago" text stays
-        // live while the popover is open (and refreshes on reopen). Without this,
-        // SwiftUI only re-invokes the body when `lastUpdateTime` changes — i.e.
-        // once per poll — leaving the timestamp frozen at "just now" in between.
-        TimelineView(.periodic(from: .now, by: 1)) { _ in
+        TimelineView(.periodic(from: .now, by: 60)) { _ in
             HStack {
                 if let error = appState.error {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -317,12 +305,38 @@ struct PopoverView: View {
                 } else if let lastUpdate = appState.lastUpdateTime {
                     let nextUpdate = lastUpdate.addingTimeInterval(TimeInterval(appState.settings.refreshInterval))
                     let timeString = DateFormatter.localizedString(from: nextUpdate, dateStyle: .none, timeStyle: .short)
-                    Text("Updated \(lastUpdate.relativeDescription). Next update: \(timeString)")
+                    Text("Updated \(lastUpdateDescription(for: lastUpdate)). Next update: \(timeString)")
                         .font(.caption2)
                         .foregroundColor(.secondary)
+
+                    Button("Reset now") {
+                        triggerRefresh(reason: "manual_refresh")
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption2)
+                    .foregroundColor(.accentColor)
+                    .disabled(isRefreshDisabled)
+                    .opacity(isRefreshDisabled ? 0.5 : 1.0)
                 }
             }
         }
+    }
+
+    private func triggerRefresh(reason: String) {
+        guard !isRefreshDisabled else { return }
+        isRefreshDisabled = true
+        Task {
+            await appState.refresh(reason: reason)
+            try? await Task.sleep(nanoseconds: UInt64(Constants.RateLimit.manualRefreshDebounce * 1_000_000_000))
+            isRefreshDisabled = false
+        }
+    }
+
+    private func lastUpdateDescription(for lastUpdate: Date) -> String {
+        if Date().timeIntervalSince(lastUpdate) < 60 {
+            return "less than 1 minute ago"
+        }
+        return lastUpdate.relativeDescription
     }
 
     /// Compact footer text for errors. When the scheduler is in an active
@@ -336,7 +350,7 @@ struct PopoverView: View {
                 timeStyle: .short
             )
             if let lastUpdate = appState.lastUpdateTime {
-                return "Updated \(lastUpdate.relativeDescription). Next update: \(timeString) (rate limit)"
+                return "Updated \(lastUpdateDescription(for: lastUpdate)). Next update: \(timeString) (rate limit)"
             }
             return "Rate limit. Next update: \(timeString)"
         }

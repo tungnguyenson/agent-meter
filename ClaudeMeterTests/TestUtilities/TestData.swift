@@ -91,7 +91,7 @@ enum TestData {
     // MARK: - App Settings
 
     static func makeAppSettings(
-        displayMode: DisplayMode = .compact,
+        displayMode: DisplayMode = .detailed,
         colorScheme: AppColorScheme = .auto,
         refreshInterval: Int = 60,
         notificationsEnabled: Bool = true,

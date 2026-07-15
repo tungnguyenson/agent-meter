@@ -75,6 +75,32 @@ enum ColorTheme {
     static func nsColorForUsage(_ usage: Double) -> NSColor {
         return NSColor(colorForUsage(usage))
     }
+
+    // MARK: - Forecast Colors
+
+    /// Maps a time-aware pace status to its display colour. This is the primary
+    /// colour rule: the hue answers "at this rate, will the window run out
+    /// before it resets?" rather than keying off a static percentage.
+    static func color(for status: WindowForecast.PaceStatus) -> Color {
+        switch status {
+        case .safe:     return green
+        case .watch:    return yellow
+        case .warning:  return orange
+        case .critical: return red
+        }
+    }
+
+    /// Forecast-driven colour, falling back to the plain percentage colour when
+    /// no forecast is available (no reset time, or too early in the window).
+    static func color(for forecast: WindowForecast?, fallbackUsage: Double) -> Color {
+        if let forecast { return color(for: forecast.status) }
+        return colorForUsage(fallbackUsage)
+    }
+
+    /// NSColor variant of `color(for:fallbackUsage:)` for AppKit (menu bar) use.
+    static func nsColor(for forecast: WindowForecast?, fallbackUsage: Double) -> NSColor {
+        return NSColor(color(for: forecast, fallbackUsage: fallbackUsage))
+    }
 }
 
 // MARK: - Color Extensions for Theme

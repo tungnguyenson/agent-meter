@@ -224,8 +224,9 @@ final class AppSettingsTests: XCTestCase {
     func testDefaultSettings() {
         let settings = AppSettings()
 
-        XCTAssertEqual(settings.displayMode, .compact)
-        XCTAssertEqual(settings.refreshInterval, 30)
+        XCTAssertEqual(settings.displayMode, .detailed)
+        XCTAssertEqual(settings.detailedModeStyle, .countdown)
+        XCTAssertEqual(settings.refreshInterval, 300)
         XCTAssertFalse(settings.launchAtLogin)
         XCTAssertTrue(settings.notificationsEnabled)
         XCTAssertEqual(settings.notifyAt, [75, 90, 95])
@@ -276,6 +277,7 @@ final class AppSettingsTests: XCTestCase {
         // Given
         var settings = AppSettings()
         settings.displayMode = .detailed
+        settings.detailedModeStyle = .fixed
         settings.refreshInterval = 120
         settings.launchAtLogin = true
         settings.notifyAt = [80, 90]
@@ -286,6 +288,7 @@ final class AppSettingsTests: XCTestCase {
 
         // Then
         XCTAssertEqual(decoded.displayMode, .detailed)
+        XCTAssertEqual(decoded.detailedModeStyle, .fixed)
         XCTAssertEqual(decoded.refreshInterval, 120)
         XCTAssertTrue(decoded.launchAtLogin)
         XCTAssertEqual(decoded.notifyAt, [80, 90])
@@ -314,6 +317,7 @@ final class AppSettingsTests: XCTestCase {
 
         // Then
         XCTAssertEqual(decoded.displayMode, .detailed)
+        XCTAssertEqual(decoded.detailedModeStyle, .countdown)
         XCTAssertEqual(decoded.colorScheme, .dark)
         XCTAssertTrue(decoded.showInDock)
         XCTAssertTrue(decoded.showSonnetLimit)

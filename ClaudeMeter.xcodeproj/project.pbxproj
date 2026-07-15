@@ -16,6 +16,7 @@
 		MOD001 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC004; };
 		MOD002 /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC005; };
 		MOD003 /* UsageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC006; };
+		MOD008 /* WindowForecast.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC060; };
 		MOD004 /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC007; };
 		MOD005 /* TokenUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC040; };
 		MOD007 /* SubscriptionType.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC042; };
@@ -79,6 +80,7 @@
 		TST003 /* KeychainServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC003; };
 		TST020 /* ClaudeCodeVersionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC020; };
 		TST004 /* UsageManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC004; };
+		TST030 /* WindowForecastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC030; };
 
 		/* Test Mocks */
 		TST005 /* MockAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC005; };
@@ -128,6 +130,7 @@
 		SRC004 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		SRC005 /* AppError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppError.swift; sourceTree = "<group>"; };
 		SRC006 /* UsageData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageData.swift; sourceTree = "<group>"; };
+		SRC060 /* WindowForecast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowForecast.swift; sourceTree = "<group>"; };
 		SRC007 /* Credentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Credentials.swift; sourceTree = "<group>"; };
 		SRC040 /* TokenUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenUsage.swift; sourceTree = "<group>"; };
 		SRC042 /* SubscriptionType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionType.swift; sourceTree = "<group>"; };
@@ -191,6 +194,7 @@
 		TST_SRC003 /* KeychainServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainServiceTests.swift; sourceTree = "<group>"; };
 		TST_SRC020 /* ClaudeCodeVersionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeVersionResolverTests.swift; sourceTree = "<group>"; };
 		TST_SRC004 /* UsageManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageManagerTests.swift; sourceTree = "<group>"; };
+		TST_SRC030 /* WindowForecastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowForecastTests.swift; sourceTree = "<group>"; };
 
 		/* Test Mocks */
 		TST_SRC005 /* MockAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAPIService.swift; sourceTree = "<group>"; };
@@ -309,6 +313,7 @@
 				SRC004 /* AppSettings.swift */,
 				SRC005 /* AppError.swift */,
 				SRC006 /* UsageData.swift */,
+				SRC060 /* WindowForecast.swift */,
 				SRC007 /* Credentials.swift */,
 				SRC040 /* TokenUsage.swift */,
 				SRC042 /* SubscriptionType.swift */,
@@ -409,12 +414,21 @@
 			children = (
 				GRP_TST_SERVICES /* Services */,
 				GRP_TST_MANAGERS /* Managers */,
+				GRP_TST_MODELS /* Models */,
 				GRP_TST_MOCKS /* Mocks */,
 				GRP_TST_UTILITIES /* TestUtilities */,
 				TST_SRC002 /* MockURLProtocol.swift */,
 				TST_SRC010 /* CustomMenuBarColorsTests.swift */,
 			);
 			path = ClaudeMeterTests;
+			sourceTree = "<group>";
+		};
+		GRP_TST_MODELS /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				TST_SRC030 /* WindowForecastTests.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		GRP_TST_MOCKS /* Mocks */ = {
@@ -603,6 +617,7 @@
 				MOD001 /* AppSettings.swift in Sources */,
 				MOD002 /* AppError.swift in Sources */,
 				MOD003 /* UsageData.swift in Sources */,
+				MOD008 /* WindowForecast.swift in Sources */,
 				MOD004 /* Credentials.swift in Sources */,
 				MOD005 /* TokenUsage.swift in Sources */,
 				MOD007 /* SubscriptionType.swift in Sources */,
@@ -647,6 +662,7 @@
 				TST003 /* KeychainServiceTests.swift in Sources */,
 				TST020 /* ClaudeCodeVersionResolverTests.swift in Sources */,
 				TST004 /* UsageManagerTests.swift in Sources */,
+				TST030 /* WindowForecastTests.swift in Sources */,
 				TST005 /* MockAPIService.swift in Sources */,
 				TST006 /* MockKeychainService.swift in Sources */,
 				TST007 /* MockCacheManager.swift in Sources */,
