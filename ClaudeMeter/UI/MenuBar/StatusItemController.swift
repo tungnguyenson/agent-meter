@@ -10,6 +10,36 @@ import Cocoa
 import SwiftUI
 import Combine
 
+enum MenuBarCountdownFormatter {
+    enum Units {
+        case hoursMinutes  // e.g. "3h 42m", "59m", "4h"
+        case daysHours     // e.g. "3d 5h", "23h", "26m"
+    }
+
+    static func label(remaining: TimeInterval, units: Units) -> String? {
+        guard remaining > 0 else { return nil }
+
+        let totalMinutes = Int(remaining / 60)
+        switch units {
+        case .hoursMinutes:
+            let hours = totalMinutes / 60
+            let minutes = totalMinutes % 60
+            if hours == 0 { return "\(minutes)m" }
+            if minutes == 0 { return "\(hours)h" }
+            return "\(hours)h \(minutes)m"
+        case .daysHours:
+            if totalMinutes < 60 { return "\(totalMinutes)m" }
+
+            let totalHours = totalMinutes / 60
+            let days = totalHours / 24
+            let hours = totalHours % 24
+            if days == 0 { return "\(hours)h" }
+            if hours == 0 { return "\(days)d" }
+            return "\(days)d \(hours)h"
+        }
+    }
+}
+
 @MainActor
 class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
@@ -161,11 +191,6 @@ class StatusItemController: NSObject {
 
     // MARK: - Detailed Mode Rendering
 
-    private enum CountdownUnits {
-        case hoursMinutes  // e.g. "3h 42m", "59m", "4h"
-        case daysHours     // e.g. "3d 5h", "23h", "6d"
-    }
-
     private var percentFont: NSFont { .monospacedDigitSystemFont(ofSize: 12, weight: .semibold) }
     private var labelFont: NSFont { .monospacedDigitSystemFont(ofSize: 12, weight: .regular) }
 
@@ -179,7 +204,7 @@ class StatusItemController: NSObject {
         symbol: String,
         fixedLabel: String,
         style: DetailedModeStyle,
-        units: CountdownUnits,
+        units: MenuBarCountdownFormatter.Units,
         duration: TimeInterval,
         palette: MenuBarColorPalette
     ) -> NSAttributedString {
@@ -256,27 +281,10 @@ class StatusItemController: NSObject {
 
     /// Build a collapsed countdown label from now until `resetsAt`.
     /// Returns nil when the reset time is missing or already past.
-    private func countdownLabel(until resetsAt: Date?, units: CountdownUnits) -> String? {
+    private func countdownLabel(until resetsAt: Date?, units: MenuBarCountdownFormatter.Units) -> String? {
         guard let resetsAt else { return nil }
         let remaining = resetsAt.timeIntervalSinceNow
-        guard remaining > 0 else { return nil }
-
-        switch units {
-        case .hoursMinutes:
-            let totalMinutes = Int(remaining / 60)
-            let hours = totalMinutes / 60
-            let minutes = totalMinutes % 60
-            if hours == 0 { return "\(minutes)m" }
-            if minutes == 0 { return "\(hours)h" }
-            return "\(hours)h \(minutes)m"
-        case .daysHours:
-            let totalHours = Int(remaining / 3600)
-            let days = totalHours / 24
-            let hours = totalHours % 24
-            if days == 0 { return "\(hours)h" }
-            if hours == 0 { return "\(days)d" }
-            return "\(days)d \(hours)h"
-        }
+        return MenuBarCountdownFormatter.label(remaining: remaining, units: units)
     }
 
     // MARK: - Progress Icon Creation
