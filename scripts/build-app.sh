@@ -1,11 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-# ClaudeMeter App Builder
+# AgentMeter App Builder
 # Usage: ./scripts/build-app.sh [version]
 
 VERSION="${1:-1.0.0}"
-APP_NAME="ClaudeMeter"
+APP_NAME="AgentMeter"
 ZIP_NAME="${APP_NAME}-${VERSION}.zip"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"

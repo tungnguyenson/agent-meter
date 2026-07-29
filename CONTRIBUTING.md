@@ -1,6 +1,6 @@
-# Contributing to ClaudeMeter
+# Contributing to AgentMeter
 
-Thank you for your interest in contributing to ClaudeMeter! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to AgentMeter! This document provides guidelines and instructions for contributing.
 
 ## Development Setup
 
@@ -15,18 +15,18 @@ Thank you for your interest in contributing to ClaudeMeter! This document provid
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/ClaudeMeter.git
-   cd ClaudeMeter
+   git clone https://github.com/YOUR_USERNAME/AgentMeter.git
+   cd AgentMeter
    ```
-3. Open `ClaudeMeter.xcodeproj` in Xcode
+3. Open `AgentMeter.xcodeproj` in Xcode
 4. Build and run the project (⌘+R)
 
 ### Project Structure
 
 ```
-ClaudeMeter/
+AgentMeter/
 ├── App/                    # Application entry points
-│   ├── ClaudeMeterApp.swift
+│   ├── AgentMeterApp.swift
 │   ├── AppDelegate.swift
 │   └── AppState.swift
 ├── Core/
@@ -68,7 +68,7 @@ ClaudeMeter/
   ```swift
   //
   //  FileName.swift
-  //  ClaudeMeter
+  //  AgentMeter
   //
   //  Copyright (c) 2026 puq.ai. All rights reserved.
   //  Licensed under the MIT License. See LICENSE file.
@@ -94,13 +94,13 @@ ClaudeMeter/
 3. Run tests and ensure they pass:
 
    ```bash
-   xcodebuild test -scheme ClaudeMeter
+   xcodebuild test -scheme AgentMeter
    ```
 
 4. Build and verify the app works:
 
    ```bash
-   xcodebuild build -scheme ClaudeMeter
+   xcodebuild build -scheme AgentMeter
    ```
 
 5. Commit your changes with clear commit messages:
@@ -122,7 +122,7 @@ ClaudeMeter/
 When reporting issues, please include:
 
 - macOS version
-- ClaudeMeter version
+- AgentMeter version
 - Steps to reproduce
 - Expected behavior
 - Actual behavior
@@ -141,7 +141,7 @@ If you have questions, feel free to:
 - Open a GitHub issue
 - Start a discussion in the Discussions tab
 
-Thank you for contributing to ClaudeMeter!
+Thank you for contributing to AgentMeter!
 
 ---
 

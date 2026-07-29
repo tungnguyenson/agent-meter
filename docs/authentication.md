@@ -1,11 +1,11 @@
 # Authentication
 
-ClaudeMeter never runs its own login flow. It has no OAuth client, no browser
+AgentMeter never runs its own login flow. It has no OAuth client, no browser
 redirect, no password field. Instead it reads the credentials that the
 **Claude Code CLI** already wrote to the macOS keychain when you ran
 `claude login`, and reuses them to call the same usage endpoint the CLI uses.
 
-If you're logged in to Claude Code, ClaudeMeter works. If you're not, it shows a
+If you're logged in to Claude Code, AgentMeter works. If you're not, it shows a
 "no credentials" state and there's nothing to configure — you log in through the
 CLI, not the app.
 
@@ -28,10 +28,10 @@ The web fallback flows `AppSettings → UsageManager → APIService → claude.a
 
 Claude Code stores its credentials as a generic-password item under the service
 name **`Claude Code-credentials`** (`Constants.Keychain.serviceName`,
-`Constants.swift:98`). ClaudeMeter looks for that exact service name.
+`Constants.swift:98`). AgentMeter looks for that exact service name.
 
 The catch: reading *another* app's keychain item through the Security framework
-(`SecItemCopyMatching`) triggers the macOS "ClaudeMeter wants to use your
+(`SecItemCopyMatching`) triggers the macOS "AgentMeter wants to use your
 confidential information" password dialog every time. To avoid nagging the user,
 `KeychainService` shells out to the system `security` binary instead:
 
@@ -93,7 +93,7 @@ guard credentials.isValid else {          // Date() < expiresAt
 `isExpiringSoon`, which trips 5 minutes before expiry
 (`Constants.Credentials.expirationWarningThreshold`, `Constants.swift:116`).
 
-**ClaudeMeter does not refresh tokens.** The `refreshToken` is read and carried
+**AgentMeter does not refresh tokens.** The `refreshToken` is read and carried
 around, but never exchanged. When the access token expires, the app surfaces
 `credentialsExpired` and waits for the Claude Code CLI to refresh the keychain
 item on its own next use. The refresh responsibility stays with the tool that
@@ -198,7 +198,7 @@ blanking the UI.
 
 ## Security notes
 
-- **No secrets are stored by ClaudeMeter.** The OAuth token lives in the keychain item that Claude Code owns; ClaudeMeter only reads it.
+- **No secrets are stored by AgentMeter.** The OAuth token lives in the keychain item that Claude Code owns; AgentMeter only reads it.
 - **No keychain password prompt** in the normal flow, because reads go through the `security` CLI rather than a cross-app `SecItemCopyMatching`.
 - **The web session key is sensitive** — it's a live `claude.ai` credential. It's entered through a `SecureField` and persisted in `AppSettings` (UserDefaults). Treat it like a password; leave it blank if you don't need the fallback.
 - Tokens are sent only to `api.anthropic.com` and (if configured) `claude.ai` over HTTPS.
@@ -208,11 +208,11 @@ blanking the UI.
 
 | Concern | File |
 |---------|------|
-| Keychain read + credential decoding | `ClaudeMeter/Core/Services/KeychainService.swift` |
-| Credential model, validity, expiry | `ClaudeMeter/Core/Models/Credentials.swift` |
-| Authenticated requests, headers, fallback | `ClaudeMeter/Core/Services/APIService.swift` |
-| Runtime `User-Agent` / CLI version detection | `ClaudeMeter/Core/Services/ClaudeCodeVersionResolver.swift` |
-| Orchestration: fetch → validate → fallback → cache | `ClaudeMeter/Core/Managers/UsageManager.swift` |
-| Endpoints, service name, headers, thresholds | `ClaudeMeter/Core/Constants.swift` |
-| Web fallback settings + wiring | `ClaudeMeter/Core/Models/AppSettings.swift`, `ClaudeMeter/App/AppState.swift` |
-| Settings UI for web fallback | `ClaudeMeter/UI/Settings/GeneralSettingsView.swift` |
+| Keychain read + credential decoding | `AgentMeter/Core/Services/KeychainService.swift` |
+| Credential model, validity, expiry | `AgentMeter/Core/Models/Credentials.swift` |
+| Authenticated requests, headers, fallback | `AgentMeter/Core/Services/APIService.swift` |
+| Runtime `User-Agent` / CLI version detection | `AgentMeter/Core/Services/ClaudeCodeVersionResolver.swift` |
+| Orchestration: fetch → validate → fallback → cache | `AgentMeter/Core/Managers/UsageManager.swift` |
+| Endpoints, service name, headers, thresholds | `AgentMeter/Core/Constants.swift` |
+| Web fallback settings + wiring | `AgentMeter/Core/Models/AppSettings.swift`, `AgentMeter/App/AppState.swift` |
+| Settings UI for web fallback | `AgentMeter/UI/Settings/GeneralSettingsView.swift` |

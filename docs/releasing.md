@@ -1,6 +1,6 @@
 # Releasing
 
-ClaudeMeter ships as a signed, notarized `.dmg`. You don't build releases by
+AgentMeter ships as a signed, notarized `.dmg`. You don't build releases by
 hand — a GitHub Actions workflow (`.github/workflows/build-dmg.yml`) does the
 whole thing on a macOS runner: it builds the app, signs it with a Developer ID
 certificate, notarizes it with Apple, packages the DMG, and publishes a GitHub
@@ -43,7 +43,7 @@ git push origin v1.0.0
 **Or use the Actions UI:** GitHub → **Actions** → **Build DMG** → **Run
 workflow** → type `1.0.0` in the version field → **Run workflow**.
 
-Either one builds `ClaudeMeter-1.0.0.dmg` and publishes a full release tagged
+Either one builds `AgentMeter-1.0.0.dmg` and publishes a full release tagged
 `v1.0.0`.
 
 > `MARKETING_VERSION` in the project is independent of the release tag. If you
@@ -100,7 +100,7 @@ workflow fails at the signing step until all five exist.
 3. Base64-encode it and copy to the clipboard:
 
    ```bash
-   base64 -i ClaudeMeter-DeveloperID.p12 | pbcopy
+   base64 -i AgentMeter-DeveloperID.p12 | pbcopy
    ```
 
    Paste the result as the value of `MACOS_CERTIFICATE`. The workflow decodes it
@@ -108,7 +108,7 @@ workflow fails at the signing step until all five exist.
 
 ## Why signing matters for this app
 
-ClaudeMeter reads OAuth credentials from the login keychain (see
+AgentMeter reads OAuth credentials from the login keychain (see
 [authentication.md](authentication.md)). Keychain access is gated per
 application by the item's access-control list, and macOS remembers an
 "Always Allow" grant against the requesting app's **code signature**.
@@ -125,7 +125,7 @@ The same scripts the CI uses also work on your machine, using your own automatic
 signing:
 
 ```bash
-# Build the Release app to build/Build/Products/Release/ClaudeMeter.app
+# Build the Release app to build/Build/Products/Release/AgentMeter.app
 ./scripts/build-app.sh [version]
 
 # Build the app and package it into a DMG in one shot

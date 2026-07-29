@@ -1,11 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-# ClaudeMeter DMG Builder
+# AgentMeter DMG Builder
 # Usage: ./scripts/create-dmg.sh [version]
 
 VERSION="${1:-1.0.0}"
-APP_NAME="ClaudeMeter"
+APP_NAME="AgentMeter"
 DMG_NAME="${APP_NAME}-${VERSION}.dmg"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"

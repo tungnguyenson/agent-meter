@@ -1,6 +1,6 @@
-"""dmgbuild settings for ClaudeMeter."""
+"""dmgbuild settings for AgentMeter."""
 
-volume_name = "ClaudeMeter"
+volume_name = "AgentMeter"
 format = "UDBZ"
 
 files = [defines["APP_PATH"]]
@@ -11,7 +11,7 @@ window_rect = ((200, 120), (480, 320))
 icon_size = 80
 text_size = 12
 icon_locations = {
-    "ClaudeMeter.app": (140, 140),
+    "AgentMeter.app": (140, 140),
     "Applications": (340, 140),
 }
 
