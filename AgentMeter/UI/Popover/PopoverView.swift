@@ -13,16 +13,20 @@ struct PopoverView: View {
     @State private var showingSettings = false
     @State private var showingLogs = false
     @State private var isRefreshDisabled = false
+    /// Non-nil while drilled into a single provider. The all-providers overview
+    /// is home, so this resets whenever the popover closes. Kept separate from
+    /// `appState.selectedProviderID` on purpose: reading one provider's detail
+    /// must not move the menu bar off the provider the user pinned there.
+    @State private var detailProviderID: ProviderID?
 
     // Size constants
     private let popoverWidth: CGFloat = 380
-    private let popoverHeight: CGFloat = 420
+    private let popoverHeight: CGFloat = 560
     private let contentPadding: CGFloat = 16
 
     // Header layout constants
     private let headerGroupSpacing: CGFloat = 8
     private let headerIconSpacing: CGFloat = 6
-    private let providerPickerWidth: CGFloat = 100
 
     var body: some View {
         ZStack {
@@ -73,57 +77,102 @@ struct PopoverView: View {
         .preferredColorScheme(appState.settings.colorScheme.colorScheme)
         .animation(.easeInOut(duration: 0.25), value: showingSettings)
         .animation(.easeInOut(duration: 0.25), value: showingLogs)
+        .onChange(of: appState.isPopoverShown) { _, isShown in
+            // The overview is home: a closed popover always reopens there.
+            if !isShown { detailProviderID = nil }
+        }
     }
 
     // MARK: - Content
 
     @ViewBuilder
     private var contentView: some View {
-        if let snapshot = appState.selectedSnapshot {
-            usageContentView(snapshot: snapshot)
-        } else if let error = appState.error {
-            errorView(error: error)
+        if let detailProviderID {
+            providerDetailView(providerID: detailProviderID)
         } else {
-            emptyStateView
+            AllProvidersView(
+                appState: appState,
+                contentPadding: contentPadding,
+                onOpenDetail: { providerID in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        detailProviderID = providerID
+                    }
+                }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func providerDetailView(providerID: ProviderID) -> some View {
+        let state = appState.providerState(providerID)
+        if let snapshot = state.snapshot {
+            usageContentView(snapshot: snapshot)
+        } else if let error = state.error {
+            errorView(providerID: providerID, error: error)
+        } else {
+            emptyStateView(providerID: providerID)
         }
     }
 
     // MARK: - Header
 
+    @ViewBuilder
     private var headerView: some View {
         HStack(spacing: headerGroupSpacing) {
-            Text("Agent Meter")
-                .font(.headline)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .fixedSize()
-                .accessibilityAddTraits(.isHeader)
-
-            providerControls
-
-            Spacer(minLength: headerGroupSpacing)
+            // `.frame(maxWidth: .infinity, alignment: .leading)` rather than a
+            // trailing `Spacer` — `detailTitle` embeds an `NSViewRepresentable`
+            // (the back button) whose intrinsic size SwiftUI can't pin down,
+            // which let a plain `Spacer` drift the whole leading group toward
+            // the middle instead of hugging the left edge.
+            Group {
+                if let detailProviderID {
+                    detailTitle(providerID: detailProviderID)
+                } else {
+                    Text("Agent Meter")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .accessibilityAddTraits(.isHeader)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             utilityControls
         }
         .frame(height: 22)
     }
 
-    private var providerControls: some View {
+    private func detailTitle(providerID: ProviderID) -> some View {
         HStack(spacing: 4) {
-            FocusRinglessProviderPicker(
-                providerIDs: appState.enabledProviderIDs,
-                selectedProviderID: appState.selectedProviderID,
-                providerName: providerName,
-                selectProvider: appState.selectProvider
+            FocusRinglessIconButton(
+                systemName: "chevron.left",
+                help: "Back to all providers",
+                accessibilityLabel: "Back to all providers",
+                action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        detailProviderID = nil
+                    }
+                }
             )
-            .frame(width: providerPickerWidth)
-            .accessibilityLabel("Usage provider")
 
-            Image(systemName: providerHealthSymbol)
+            Image(providerID.iconAssetName)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(.secondary)
+                .frame(width: 14, height: 14)
+
+            Text(providerName(providerID))
+                .font(.headline)
+                .lineLimit(1)
+                .fixedSize()
+                .accessibilityAddTraits(.isHeader)
+
+            Image(systemName: providerHealthSymbol(providerID))
                 .font(.caption2)
-                .foregroundColor(providerHealthColor)
-                .help(providerHealthDescription)
-                .accessibilityLabel(providerHealthDescription)
+                .foregroundColor(providerHealthColor(providerID))
+                .help(providerHealthDescription(providerID))
+                .accessibilityLabel(providerHealthDescription(providerID))
         }
     }
 
@@ -131,12 +180,14 @@ struct PopoverView: View {
         HStack(spacing: headerIconSpacing) {
             ProgressView()
                 .controlSize(.small)
-                .opacity(appState.isLoading ? 1 : 0)
+                .opacity(isContentLoading ? 1 : 0)
                 .accessibilityLabel("Loading usage data")
 
             FocusRinglessIconButton(
                 systemName: "arrow.clockwise",
-                help: "Refresh usage data",
+                help: detailProviderID == nil
+                    ? "Refresh all providers"
+                    : "Refresh usage data",
                 accessibilityLabel: "Refresh",
                 action: { triggerRefresh(reason: "manual_refresh") }
             )
@@ -209,6 +260,8 @@ struct PopoverView: View {
                         valueMetricCard(metric)
                     }
                 }
+
+                viewOnWebLink(providerID: snapshot.providerID)
             }
             .padding(.horizontal, contentPadding)
             .padding(.vertical, 8)
@@ -217,9 +270,28 @@ struct PopoverView: View {
         .scrollIndicators(.hidden)
     }
 
+    /// Points to the provider's own dashboard, since Agent Meter only ever
+    /// shows a summary — the full breakdown lives on the provider's site.
+    private func viewOnWebLink(providerID: ProviderID) -> some View {
+        Button(action: {
+            NSWorkspace.shared.open(providerID.usageDashboardURL)
+        }) {
+            HStack(spacing: 4) {
+                Text("View detailed usage on \(providerName(providerID))")
+                    .font(.caption)
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2)
+            }
+            .foregroundStyle(ColorTheme.accent)
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .padding(.top, 4)
+    }
+
     // MARK: - Error View
 
-    private func errorView(error: Error) -> some View {
+    private func errorView(providerID: ProviderID, error: Error) -> some View {
         VStack(spacing: 12) {
             Spacer()
 
@@ -247,13 +319,7 @@ struct PopoverView: View {
             }
 
             Button("Retry") {
-                guard !isRefreshDisabled else { return }
-                isRefreshDisabled = true
-                Task {
-                    await appState.refreshSelected(reason: "retry_button")
-                    try? await Task.sleep(nanoseconds: UInt64(Constants.RateLimit.manualRefreshDebounce * 1_000_000_000))
-                    isRefreshDisabled = false
-                }
+                triggerRefresh(reason: "retry_button")
             }
             .buttonStyle(.bordered)
             .focusEffectDisabled()
@@ -266,7 +332,7 @@ struct PopoverView: View {
 
     // MARK: - Empty State
 
-    private var emptyStateView: some View {
+    private func emptyStateView(providerID: ProviderID) -> some View {
         VStack(spacing: 12) {
             Spacer()
 
@@ -277,7 +343,7 @@ struct PopoverView: View {
             Text("No Usage Data")
                 .font(.headline)
 
-            Text("Click refresh to load \(providerName(appState.selectedProviderID)) usage.")
+            Text("Click refresh to load \(providerName(providerID)) usage.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -299,7 +365,7 @@ struct PopoverView: View {
     private var footerView: some View {
         TimelineView(.periodic(from: .now, by: 60)) { _ in
             HStack {
-                if let error = appState.error {
+                if let error = footerError {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption2)
                         .foregroundColor(ColorTheme.orange)
@@ -308,14 +374,14 @@ struct PopoverView: View {
                         .foregroundColor(ColorTheme.orange)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                } else if let lastUpdate = appState.lastUpdateTime {
+                } else if let lastUpdate = footerLastUpdate {
                     let nextUpdate = lastUpdate.addingTimeInterval(TimeInterval(appState.settings.refreshInterval))
                     let timeString = DateFormatter.localizedString(from: nextUpdate, dateStyle: .none, timeStyle: .short)
                     Text("Updated \(lastUpdateDescription(for: lastUpdate)). Next update: \(timeString)")
                         .font(.caption2)
                         .foregroundColor(.secondary)
 
-                    Button("Reset now") {
+                    Button("Refresh now") {
                         triggerRefresh(reason: "manual_refresh")
                     }
                     .buttonStyle(.plain)
@@ -329,11 +395,34 @@ struct PopoverView: View {
         }
     }
 
+    /// On the overview the footer speaks for every provider at once: the newest
+    /// fetch time, and a count rather than one provider's error text.
+    private var footerLastUpdate: Date? {
+        guard let detailProviderID else { return appState.latestSnapshotTime }
+        return appState.snapshot(for: detailProviderID)?.fetchedAt
+    }
+
+    private var footerError: Error? {
+        guard let detailProviderID else { return nil }
+        return appState.providerState(detailProviderID).error
+    }
+
+    private var isContentLoading: Bool {
+        guard let detailProviderID else { return appState.isAnyProviderLoading }
+        return appState.providerState(detailProviderID).isLoading
+    }
+
+    /// The refresh control follows the screen: everything on the overview, just
+    /// the drilled-into provider in detail.
     private func triggerRefresh(reason: String) {
         guard !isRefreshDisabled else { return }
         isRefreshDisabled = true
         Task {
-            await appState.refreshSelected(reason: reason)
+            if let detailProviderID {
+                await appState.refreshProvider(detailProviderID, reason: reason)
+            } else {
+                await appState.refresh(reason: reason)
+            }
             try? await Task.sleep(nanoseconds: UInt64(Constants.RateLimit.manualRefreshDebounce * 1_000_000_000))
             isRefreshDisabled = false
         }
@@ -343,26 +432,29 @@ struct PopoverView: View {
         providerID.displayName
     }
 
-    private var providerHealthSymbol: String {
-        if appState.error != nil { return "exclamationmark.circle.fill" }
-        if appState.selectedSnapshot != nil { return "checkmark.circle.fill" }
+    private func providerHealthSymbol(_ providerID: ProviderID) -> String {
+        let state = appState.providerState(providerID)
+        if state.error != nil { return "exclamationmark.circle.fill" }
+        if state.snapshot != nil { return "checkmark.circle.fill" }
         return "circle.dotted"
     }
 
-    private var providerHealthColor: Color {
-        if appState.error != nil { return ColorTheme.orange }
-        if appState.selectedSnapshot != nil { return ColorTheme.green }
+    private func providerHealthColor(_ providerID: ProviderID) -> Color {
+        let state = appState.providerState(providerID)
+        if state.error != nil { return ColorTheme.orange }
+        if state.snapshot != nil { return ColorTheme.green }
         return .secondary
     }
 
-    private var providerHealthDescription: String {
-        if let error = appState.error {
-            return "\(providerName(appState.selectedProviderID)) unavailable: \(error.localizedDescription)"
+    private func providerHealthDescription(_ providerID: ProviderID) -> String {
+        let state = appState.providerState(providerID)
+        if let error = state.error {
+            return "\(providerName(providerID)) unavailable: \(error.localizedDescription)"
         }
-        if appState.selectedSnapshot != nil {
-            return "\(providerName(appState.selectedProviderID)) connected"
+        if state.snapshot != nil {
+            return "\(providerName(providerID)) connected"
         }
-        return "\(providerName(appState.selectedProviderID)) has not been checked"
+        return "\(providerName(providerID)) has not been checked"
     }
 
     private func visibleMetrics(in snapshot: UsageSnapshot) -> [UsageMetric] {
@@ -595,83 +687,7 @@ private struct FocusRinglessIconButton: NSViewRepresentable {
     }
 }
 
-private struct FocusRinglessProviderPicker: NSViewRepresentable {
-    let providerIDs: [ProviderID]
-    let selectedProviderID: ProviderID
-    let providerName: (ProviderID) -> String
-    let selectProvider: (ProviderID) -> Void
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(selectProvider: selectProvider)
-    }
-
-    func makeNSView(context: Context) -> NSPopUpButton {
-        let button = QuietFocusPopUpButton(frame: .zero, pullsDown: false)
-        button.isBordered = false
-        button.controlSize = .small
-        button.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        button.focusRingType = .none
-        button.target = context.coordinator
-        button.action = #selector(Coordinator.selectionChanged)
-        button.setAccessibilityLabel("Usage provider")
-        return button
-    }
-
-    func updateNSView(_ button: NSPopUpButton, context: Context) {
-        context.coordinator.providerIDs = providerIDs
-        context.coordinator.selectProvider = selectProvider
-        button.removeAllItems()
-        button.addItems(withTitles: providerIDs.map(providerName))
-        if let index = providerIDs.firstIndex(of: selectedProviderID) {
-            button.selectItem(at: index)
-        }
-        button.isEnabled = isEnabled
-        button.focusRingType = .none
-    }
-
-    final class Coordinator: NSObject {
-        var providerIDs: [ProviderID] = []
-        var selectProvider: (ProviderID) -> Void
-
-        init(selectProvider: @escaping (ProviderID) -> Void) {
-            self.selectProvider = selectProvider
-        }
-
-        @objc func selectionChanged(_ sender: NSPopUpButton) {
-            guard providerIDs.indices.contains(sender.indexOfSelectedItem) else { return }
-            selectProvider(providerIDs[sender.indexOfSelectedItem])
-        }
-    }
-}
-
 private final class QuietFocusButton: NSButton {
-    private var showsKeyboardFocus = false
-
-    override func becomeFirstResponder() -> Bool {
-        let accepted = super.becomeFirstResponder()
-        showsKeyboardFocus = accepted && NSApp.currentEvent?.type == .keyDown
-        updateKeyboardFocusAppearance()
-        return accepted
-    }
-
-    override func resignFirstResponder() -> Bool {
-        let accepted = super.resignFirstResponder()
-        showsKeyboardFocus = false
-        updateKeyboardFocusAppearance()
-        return accepted
-    }
-
-    private func updateKeyboardFocusAppearance() {
-        wantsLayer = true
-        layer?.cornerRadius = 4
-        layer?.backgroundColor = showsKeyboardFocus
-            ? NSColor.quaternaryLabelColor.withAlphaComponent(0.45).cgColor
-            : NSColor.clear.cgColor
-    }
-}
-
-private final class QuietFocusPopUpButton: NSPopUpButton {
     private var showsKeyboardFocus = false
 
     override func becomeFirstResponder() -> Bool {

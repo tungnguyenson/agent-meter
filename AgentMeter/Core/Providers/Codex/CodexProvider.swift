@@ -333,6 +333,11 @@ final class CodexProvider: UsageProvider, @unchecked Sendable {
         shortName: "Codex",
         symbolName: "chevron.left.forwardslash.chevron.right"
     )
+    /// The mandatory app-server RPC method fetchSnapshot() blocks on
+    /// (`readAccount()` is best-effort and doesn't gate the fetch). This is a
+    /// JSON-RPC method sent to the local `codex` process, not an HTTP path —
+    /// no domain to prefix it with.
+    let debugEndpoint = "account/rateLimits/read"
 
     private let resolver: CodexBinaryResolver
     private let clientFactory: @Sendable (URL) -> any CodexAppServerServing

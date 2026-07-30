@@ -12,6 +12,9 @@ struct DebugLogEntry: Identifiable, Codable {
     let id: UUID
     let timestamp: Date
     let category: Category
+    /// Which provider this call belongs to. Optional so entries logged before
+    /// this field existed (persisted JSON on disk) still decode.
+    let providerID: ProviderID?
     let message: String
     let detail: String?
 
@@ -35,12 +38,34 @@ struct DebugLogEntry: Identifiable, Codable {
         }
     }
 
-    init(id: UUID = UUID(), timestamp: Date, category: Category, message: String, detail: String? = nil) {
+    init(
+        id: UUID = UUID(),
+        timestamp: Date,
+        category: Category,
+        providerID: ProviderID? = nil,
+        message: String,
+        detail: String? = nil
+    ) {
         self.id = id
         self.timestamp = timestamp
         self.category = category
+        self.providerID = providerID
         self.message = message
         self.detail = detail
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, timestamp, category, providerID, message, detail
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        category = try container.decode(Category.self, forKey: .category)
+        providerID = try container.decodeIfPresent(ProviderID.self, forKey: .providerID)
+        message = try container.decode(String.self, forKey: .message)
+        detail = try container.decodeIfPresent(String.self, forKey: .detail)
     }
 }
 
@@ -71,8 +96,19 @@ class DebugLogger: ObservableObject {
         loadFromDisk()
     }
 
-    func log(_ category: DebugLogEntry.Category, _ message: String, detail: String? = nil) {
-        let entry = DebugLogEntry(timestamp: Date(), category: category, message: message, detail: detail)
+    func log(
+        _ category: DebugLogEntry.Category,
+        _ message: String,
+        providerID: ProviderID? = nil,
+        detail: String? = nil
+    ) {
+        let entry = DebugLogEntry(
+            timestamp: Date(),
+            category: category,
+            providerID: providerID,
+            message: message,
+            detail: detail
+        )
         entries.append(entry)
         if entries.count > maxEntries {
             entries.removeFirst(entries.count - maxEntries)

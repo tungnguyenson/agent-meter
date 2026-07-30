@@ -8,6 +8,7 @@ final class ClaudeCodeProvider: UsageProvider, @unchecked Sendable {
         shortName: "Claude",
         symbolName: "sparkles"
     )
+    let debugEndpoint = "\(Constants.API.baseURL)\(Constants.API.usageEndpoint)"
 
     private let apiService: APIServiceProtocol
     private let keychainService: KeychainServiceProtocol

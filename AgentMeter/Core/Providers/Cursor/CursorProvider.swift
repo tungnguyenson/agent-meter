@@ -25,6 +25,7 @@ final class CursorProvider: UsageProvider, @unchecked Sendable {
         shortName: "Cursor",
         symbolName: "cursorarrow"
     )
+    let debugEndpoint = "\(Constants.Cursor.baseURL)/api/usage-summary"
 
     private let credentialsReader: CursorCredentialsReading
     private let apiClient: CursorAPIServing

@@ -56,6 +56,9 @@
 		UIP003 /* ProgressRingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC020; };
 		UIP004 /* ProgressBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC021; };
 		UIP005 /* CountdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC022; };
+		UIP006 /* AllProvidersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC101; };
+		UIP007 /* ProviderSummaryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC102; };
+		UIP008 /* ProviderMetricRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC103; };
 
 		/* UI Components */
 		UIC001 /* ColorTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC023; };
@@ -96,6 +99,7 @@
 		TST004 /* UsageManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC004; };
 		TST050 /* MultiProviderArchitectureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC050; };
 		TST030 /* WindowForecastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC030; };
+		TST031 /* UsageSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC031; };
 		TST040 /* MenuBarCountdownFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TST_SRC040; };
 
 		/* Test Mocks */
@@ -186,6 +190,9 @@
 		SRC020 /* ProgressRingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressRingView.swift; sourceTree = "<group>"; };
 		SRC021 /* ProgressBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressBarView.swift; sourceTree = "<group>"; };
 		SRC022 /* CountdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CountdownView.swift; sourceTree = "<group>"; };
+		SRC101 /* AllProvidersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllProvidersView.swift; sourceTree = "<group>"; };
+		SRC102 /* ProviderSummaryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSummaryCard.swift; sourceTree = "<group>"; };
+		SRC103 /* ProviderMetricRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderMetricRow.swift; sourceTree = "<group>"; };
 
 		/* UI Components */
 		SRC023 /* ColorTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorTheme.swift; sourceTree = "<group>"; };
@@ -227,6 +234,7 @@
 		TST_SRC004 /* UsageManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageManagerTests.swift; sourceTree = "<group>"; };
 		TST_SRC050 /* MultiProviderArchitectureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiProviderArchitectureTests.swift; sourceTree = "<group>"; };
 		TST_SRC030 /* WindowForecastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowForecastTests.swift; sourceTree = "<group>"; };
+		TST_SRC031 /* UsageSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSnapshotTests.swift; sourceTree = "<group>"; };
 
 		/* Test Mocks */
 		TST_SRC005 /* MockAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAPIService.swift; sourceTree = "<group>"; };
@@ -448,6 +456,9 @@
 				SRC020 /* ProgressRingView.swift */,
 				SRC021 /* ProgressBarView.swift */,
 				SRC022 /* CountdownView.swift */,
+				SRC101 /* AllProvidersView.swift */,
+				SRC102 /* ProviderSummaryCard.swift */,
+				SRC103 /* ProviderMetricRow.swift */,
 			);
 			path = Popover;
 			sourceTree = "<group>";
@@ -507,6 +518,7 @@
 			isa = PBXGroup;
 			children = (
 				TST_SRC030 /* WindowForecastTests.swift */,
+				TST_SRC031 /* UsageSnapshotTests.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -729,6 +741,9 @@
 				UIP003 /* ProgressRingView.swift in Sources */,
 				UIP004 /* ProgressBarView.swift in Sources */,
 				UIP005 /* CountdownView.swift in Sources */,
+				UIP006 /* AllProvidersView.swift in Sources */,
+				UIP007 /* ProviderSummaryCard.swift in Sources */,
+				UIP008 /* ProviderMetricRow.swift in Sources */,
 				UIC001 /* ColorTheme.swift in Sources */,
 				UIC002 /* AnimatedNumber.swift in Sources */,
 				UIC003 /* PulseEffect.swift in Sources */,
@@ -757,6 +772,7 @@
 				TST020 /* ClaudeCodeVersionResolverTests.swift in Sources */,
 				TST004 /* UsageManagerTests.swift in Sources */,
 				TST030 /* WindowForecastTests.swift in Sources */,
+				TST031 /* UsageSnapshotTests.swift in Sources */,
 				TST040 /* MenuBarCountdownFormatterTests.swift in Sources */,
 				TST050 /* MultiProviderArchitectureTests.swift in Sources */,
 				TST005 /* MockAPIService.swift in Sources */,

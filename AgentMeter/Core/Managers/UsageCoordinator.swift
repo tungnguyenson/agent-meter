@@ -97,12 +97,25 @@ final class UsageCoordinator: ObservableObject {
                         )
                     }
                     do {
+                        await DebugLogger.shared.log(.request, "API: \(provider.debugEndpoint)", providerID: provider.id)
+                        let snapshot = try await provider.fetchSnapshot()
+                        await DebugLogger.shared.log(
+                            .response,
+                            "API: \(provider.debugEndpoint) SUCCESS",
+                            providerID: provider.id
+                        )
                         return ProviderRefreshResult(
                             providerID: provider.id,
                             configurationStatus: .ready,
-                            result: .success(try await provider.fetchSnapshot())
+                            result: .success(snapshot)
                         )
                     } catch {
+                        await DebugLogger.shared.log(
+                            .error,
+                            "API: \(provider.debugEndpoint) FAILED",
+                            providerID: provider.id,
+                            detail: error.localizedDescription
+                        )
                         let errorStatus = Self.configurationStatus(for: error)
                         return ProviderRefreshResult(
                             providerID: provider.id,

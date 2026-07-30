@@ -76,6 +76,50 @@ Open settings from the menu bar popover:
 - **Notifications**: Enable/disable alerts and configure the alert thresholds
 - **About**: App version and information
 
+## Terms of service compliance
+
+Agent Meter only reads usage/quota numbers a provider's own official CLI
+already has access to. It never sends a prompt, never calls a model, and
+never spends a token or dollar of your quota — every request below is a
+read of data the provider already computed for your account. Risk differs a
+lot by provider, so each is assessed on what its code actually calls, not on
+what the app is named:
+
+- **Claude Code — low risk.** A single `GET /api/oauth/usage` against
+  `api.anthropic.com` — the same internal endpoint the Claude Code CLI
+  itself polls to show quota — using the OAuth token the CLI already stored
+  in Keychain. No prompt is sent, so no rate limit is touched. The one
+  caveat: this endpoint isn't part of Anthropic's published public API, and
+  the request mirrors the CLI's own User-Agent so it's accepted; if
+  Anthropic ever restricts it to CLI-only traffic, this integration could
+  break or be blocked. See [docs/providers/claude-code.md](docs/providers/claude-code.md).
+- **Codex — lowest risk.** JSON-RPC over stdio to the locally installed
+  `codex app-server` process, the same documented interface OpenAI uses to
+  power its own VS Code extension (see OpenAI's published
+  [`codex-rs/app-server`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
+  protocol). Agent Meter never touches OpenAI's HTTP backend directly,
+  never reads `~/.codex/auth.json`, and only calls read-only account
+  methods. This is a sanctioned third-party integration surface, not a
+  reverse-engineered one. See [docs/providers/codex.md](docs/providers/codex.md).
+- **Cursor — highest risk, flagged rather than shipped quietly.** Cursor
+  publishes no usage API for personal accounts (only an Enterprise/Team
+  Admin API, per `cursor.com/docs/api`). The Cursor provider instead calls
+  undocumented internal endpoints behind `cursor.com` found by probing the
+  web dashboard's own network traffic, decodes the JWT in the session
+  cookie Cursor's CLI stores in Keychain to authenticate as that dashboard
+  session, and adds a forged `Origin` header to pass the endpoint's CSRF
+  check. [Cursor's Terms of Service](https://cursor.com/terms-of-service)
+  explicitly prohibit reverse engineering the Service's underlying
+  structure, "probe, scan or attempt to penetrate the Service," and
+  "harvest, scrape, or extract data from the Service" — this integration
+  matches those clauses more directly than the other two providers do, so
+  treat it as best-effort: read-only, nothing is logged, and it can break
+  or be revoked without notice. See [docs/providers/cursor.md](docs/providers/cursor.md)
+  for the full reverse-engineering notes.
+
+This is not legal advice — Anthropic, OpenAI, and Cursor are the final
+arbiters of their own terms.
+
 ## Architecture
 
 The app separates provider acquisition from normalized usage state and UI:

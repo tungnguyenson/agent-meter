@@ -62,6 +62,49 @@ final class AppState: ObservableObject {
         settings.enabledProviderIDs
     }
 
+    // MARK: - Per-Provider Access
+
+    /// The provider whose pinned metrics render in the menu bar. Distinct from
+    /// popover navigation: drilling into a provider to read its detail must not
+    /// silently rewrite what the menu bar shows.
+    var menuBarProviderID: ProviderID {
+        selectedProviderID
+    }
+
+    func providerState(_ providerID: ProviderID) -> ProviderUsageState {
+        providerStates[providerID] ?? .idle
+    }
+
+    func snapshot(for providerID: ProviderID) -> UsageSnapshot? {
+        providerStates[providerID]?.snapshot
+    }
+
+    /// Metrics shown for `providerID` on the all-providers overview — the same
+    /// selection the menu bar renders, so the two surfaces never disagree.
+    func pinnedMetrics(for providerID: ProviderID) -> [UsageMetric] {
+        guard let snapshot = snapshot(for: providerID) else { return [] }
+        return snapshot.pinnedPercentageMetrics(
+            pinnedIDs: settings.pinnedMetricIDsByProvider[providerID] ?? []
+        )
+    }
+
+    // MARK: - Overview Aggregates
+
+    /// Newest successful fetch across enabled providers, for the overview footer.
+    var latestSnapshotTime: Date? {
+        enabledProviderIDs
+            .compactMap { snapshot(for: $0)?.fetchedAt }
+            .max()
+    }
+
+    var isAnyProviderLoading: Bool {
+        enabledProviderIDs.contains { providerStates[$0]?.isLoading == true }
+    }
+
+    var providerIDsWithErrors: [ProviderID] {
+        enabledProviderIDs.filter { providerStates[$0]?.error != nil }
+    }
+
     init() {
         var loadedSettings = AppSettings.load()
         Self.migrateLegacySecret(settings: &loadedSettings)
@@ -159,10 +202,6 @@ final class AppState: ObservableObject {
 
     func refresh(reason: String = "unknown") async {
         await performRefresh(reason: reason)
-    }
-
-    func refreshSelected(reason: String = "manual_refresh") async {
-        await refreshProvider(selectedProviderID, reason: reason)
     }
 
     func onAppBecameActive() {
@@ -309,7 +348,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func refreshProvider(_ providerID: ProviderID, reason: String) async {
+    func refreshProvider(_ providerID: ProviderID, reason: String) async {
         guard settings.enabledProviderIDs.contains(providerID),
               !providersFetching.contains(providerID) else {
             return

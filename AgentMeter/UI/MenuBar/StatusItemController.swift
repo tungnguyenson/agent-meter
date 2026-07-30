@@ -75,8 +75,12 @@ class StatusItemController: NSObject {
 
     private func setupPopover() {
         let pop = NSPopover()
-        pop.contentSize = NSSize(width: 380, height: 420)
+        pop.contentSize = NSSize(width: 380, height: 560)
         pop.behavior = .transient
+        // Delegate rather than the toggle methods: `.transient` popovers also
+        // close on Escape and on dismissals AppKit handles itself, and
+        // `PopoverView` resets its navigation off this flag.
+        pop.delegate = self
 
         let popoverView = PopoverView(appState: appState)
         pop.contentViewController = NSHostingController(rootView: popoverView)
@@ -120,6 +124,7 @@ class StatusItemController: NSObject {
             let palette = MenuBarColorPalette.resolve(from: settings)
             updateDetailedMode(
                 button: button,
+                providerID: settings.selectedProviderID,
                 metrics: metrics,
                 style: settings.detailedModeStyle,
                 palette: palette
@@ -147,18 +152,14 @@ class StatusItemController: NSObject {
         settings: AppSettings
     ) -> [UsageMetric] {
         guard let snapshot else { return [] }
-        let pinnedIDs = settings.pinnedMetricIDsByProvider[snapshot.providerID] ?? []
-        let pinned = pinnedIDs
-            .compactMap { snapshot.metric(id: $0) }
-            .filter { $0.usedPercent != nil }
-        let fallback = snapshot.percentageMetrics.filter { metric in
-            !pinned.contains { $0.id == metric.id }
-        }
-        return Array((pinned + fallback).prefix(2))
+        return snapshot.pinnedPercentageMetrics(
+            pinnedIDs: settings.pinnedMetricIDsByProvider[snapshot.providerID] ?? []
+        )
     }
 
     private func updateDetailedMode(
         button: NSStatusBarButton,
+        providerID: ProviderID,
         metrics: [UsageMetric],
         style: DetailedModeStyle,
         palette: MenuBarColorPalette
@@ -169,11 +170,29 @@ class StatusItemController: NSObject {
             return
         }
         let title = NSMutableAttributedString()
+        title.append(providerIconString(providerID, color: palette.icon))
+        title.append(NSAttributedString(string: " ", attributes: [.font: labelFont]))
         for (index, metric) in metrics.enumerated() {
             if index > 0 { title.append(dividerString(color: palette.text)) }
             title.append(metricSegment(metric, style: style, palette: palette))
         }
         button.attributedTitle = title
+    }
+
+    /// Renders the pinned provider's brand mark as a leading, tinted
+    /// attachment so the menu bar makes clear at a glance whose numbers these
+    /// are, without the user having to open the popover.
+    private func providerIconString(_ providerID: ProviderID, color: NSColor) -> NSAttributedString {
+        guard let logo = NSImage(named: providerID.iconAssetName) else {
+            return NSAttributedString()
+        }
+        logo.size = NSSize(width: 12, height: 12)
+        let attachment = NSTextAttachment()
+        let tinted = tintedImage(logo, color: color)
+        attachment.image = tinted
+        let y = (percentFont.capHeight - tinted.size.height) / 2
+        attachment.bounds = CGRect(x: 0, y: y, width: tinted.size.width, height: tinted.size.height)
+        return NSAttributedString(attachment: attachment)
     }
 
     private func metricSegment(
@@ -478,6 +497,19 @@ class StatusItemController: NSObject {
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
         }
+    }
+}
+
+// MARK: - NSPopoverDelegate
+
+extension StatusItemController: NSPopoverDelegate {
+    func popoverDidShow(_ notification: Notification) {
+        appState.isPopoverShown = true
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        appState.isPopoverShown = false
+        removeEventMonitor()
     }
 }
 

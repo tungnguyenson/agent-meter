@@ -44,8 +44,17 @@ struct DebugLogView: View {
     private struct LogRow: Identifiable {
         let id: UUID
         var timestamp: Date
+        let providerID: ProviderID?
         let apiCall: String
         var status: LogStatus
+
+        var providerLabel: String {
+            providerID?.shortName ?? "Unknown"
+        }
+
+        var transportSymbol: String {
+            providerID?.debugTransportSymbol ?? "questionmark.circle"
+        }
     }
 
     private var logRows: [LogRow] {
@@ -56,10 +65,18 @@ struct DebugLogView: View {
 
             switch entry.category {
             case .request, .fallback:
-                rows.append(LogRow(id: entry.id, timestamp: entry.timestamp, apiCall: apiCall, status: .pending))
+                rows.append(LogRow(
+                    id: entry.id,
+                    timestamp: entry.timestamp,
+                    providerID: entry.providerID,
+                    apiCall: apiCall,
+                    status: .pending
+                ))
             case .response, .error:
                 if let index = rows.indices.reversed().first(where: {
-                    rows[$0].apiCall == apiCall && rows[$0].status == .pending
+                    rows[$0].apiCall == apiCall
+                        && rows[$0].providerID == entry.providerID
+                        && rows[$0].status == .pending
                 }) {
                     rows[index].timestamp = entry.timestamp
                     rows[index].status = entry.category == .response ? .success : .error
@@ -67,6 +84,7 @@ struct DebugLogView: View {
                     rows.append(LogRow(
                         id: entry.id,
                         timestamp: entry.timestamp,
+                        providerID: entry.providerID,
                         apiCall: apiCall,
                         status: entry.category == .response ? .success : .error
                     ))
@@ -145,20 +163,39 @@ struct DebugLogView: View {
     }
 
     private func logEntryRow(_ row: LogRow) -> some View {
-        HStack(spacing: 10) {
-            Text(Self.timeFormatter.string(from: row.timestamp))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                Text(Self.timeFormatter.string(from: row.timestamp))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
 
-            Text(row.apiCall)
-                .font(.system(size: 12, weight: .medium))
-                .lineLimit(1)
+                Text(row.providerLabel)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.primary.opacity(0.08))
+                    .cornerRadius(4)
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
 
-            Text(row.status.label)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(row.status.color)
+                Text(row.status.label)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(row.status.color)
+            }
+
+            HStack(alignment: .top, spacing: 5) {
+                Image(systemName: row.transportSymbol)
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary.opacity(0.7))
+
+                Text(row.apiCall)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
@@ -215,7 +252,7 @@ struct DebugLogView: View {
     private func copyAllLogs() {
         let text = logRows.map { row in
             let time = Self.timeFormatter.string(from: row.timestamp)
-            return "[\(time)] \(row.apiCall) \(row.status.label)"
+            return "[\(time)] [\(row.providerLabel)] \(row.apiCall) \(row.status.label)"
         }.joined(separator: "\n")
 
         NSPasteboard.general.clearContents()

@@ -146,6 +146,25 @@ enum Constants {
         static let aboutLogoSize: CGFloat = 64
     }
 
+    // MARK: - All-Providers Overview
+    /// Tuning for the compact surfaces that summarise every provider at once —
+    /// the menu bar title and the all-providers overview screen. Both show the
+    /// same short list of metrics so the popover explains what the menu bar says.
+    enum Overview {
+        /// Metrics rendered per provider. Matches the menu bar's two-segment
+        /// title and the two-pin cap enforced by `AppSettings.validate()`.
+        static let pinnedMetricLimit = 2
+
+        /// Diameter and stroke width of a provider's metric ring.
+        static let metricRingSize: CGFloat = 46
+        static let metricRingLineWidth: CGFloat = 5
+
+        /// Fixed width of one metric column, so a provider with a single
+        /// pinned metric lines up with one that has two rather than
+        /// stretching to fill the row.
+        static let metricColumnWidth: CGFloat = 120
+    }
+
     // MARK: - Wake Recovery Configuration
     enum WakeRecovery {
         static let initialDelay: TimeInterval = 2.0
