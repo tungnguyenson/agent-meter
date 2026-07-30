@@ -45,7 +45,8 @@ struct AppSettings: Codable, Equatable {
     var metricVisibilityByProvider: [ProviderID: [String: Bool]] = [:]
     var pinnedMetricIDsByProvider: [ProviderID: [String]] = [
         .claudeCode: ["claude.five-hour", "claude.seven-day"],
-        .codex: ["codex.codex.primary", "codex.codex.secondary"]
+        .codex: ["codex.codex.primary", "codex.codex.secondary"],
+        .cursor: ["cursor.plan.auto", "cursor.plan.api"]
     ]
     var codexBinaryPath: String = ""
 

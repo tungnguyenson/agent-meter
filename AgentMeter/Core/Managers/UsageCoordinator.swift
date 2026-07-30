@@ -157,6 +157,12 @@ final class UsageCoordinator: ObservableObject {
            case .authenticationRequired = codexError {
             return .authenticationRequired(codexError.localizedDescription)
         }
+        if let cursorError = error as? CursorProviderError {
+            return .authenticationRequired(cursorError.localizedDescription)
+        }
+        if case .unauthorized = error as? CursorAPIError {
+            return .authenticationRequired(CursorAPIError.unauthorized.localizedDescription)
+        }
         return .ready
     }
 

@@ -29,6 +29,10 @@ struct GeneralSettingsView: View {
                         "Codex",
                         isOn: providerBinding(.codex)
                     )
+                    Toggle(
+                        "Cursor",
+                        isOn: providerBinding(.cursor)
+                    )
                     TextField(
                         "Codex binary path (automatic when blank)",
                         text: $appState.settings.codexBinaryPath

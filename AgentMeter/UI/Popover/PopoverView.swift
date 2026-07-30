@@ -340,7 +340,7 @@ struct PopoverView: View {
     }
 
     private func providerName(_ providerID: ProviderID) -> String {
-        providerID == .claudeCode ? "Claude Code" : "Codex"
+        providerID.displayName
     }
 
     private var providerHealthSymbol: String {

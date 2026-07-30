@@ -3,8 +3,17 @@ import Foundation
 enum ProviderID: String, Codable, CaseIterable, Hashable, Identifiable {
     case claudeCode = "claude-code"
     case codex
+    case cursor
 
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .claudeCode: return "Claude Code"
+        case .codex: return "Codex"
+        case .cursor: return "Cursor"
+        }
+    }
 }
 
 struct ProviderMetadata: Equatable {
@@ -104,12 +113,29 @@ protocol UsageProvider: Sendable {
 
 extension UsageProvider {
     var metadata: ProviderMetadata {
-        ProviderMetadata(
-            id: id,
-            displayName: id == .claudeCode ? "Claude Code" : "Codex",
-            shortName: id == .claudeCode ? "Claude" : "Codex",
-            symbolName: id == .claudeCode ? "sparkles" : "chevron.left.forwardslash.chevron.right"
-        )
+        switch id {
+        case .claudeCode:
+            return ProviderMetadata(
+                id: id,
+                displayName: id.displayName,
+                shortName: "Claude",
+                symbolName: "sparkles"
+            )
+        case .codex:
+            return ProviderMetadata(
+                id: id,
+                displayName: id.displayName,
+                shortName: "Codex",
+                symbolName: "chevron.left.forwardslash.chevron.right"
+            )
+        case .cursor:
+            return ProviderMetadata(
+                id: id,
+                displayName: id.displayName,
+                shortName: "Cursor",
+                symbolName: "cursorarrow"
+            )
+        }
     }
 
     func configurationStatus() async -> ProviderConfigurationStatus {

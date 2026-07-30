@@ -1,22 +1,22 @@
 ---
-description: "Workspace Copilot instructions for ClaudeMeter (macOS SwiftUI app). Use these guidelines to stay aligned with project architecture and test patterns."
+description: "Workspace Copilot instructions for Agent Meter (macOS SwiftUI app). Use these guidelines to stay aligned with project architecture and test patterns."
 ---
 
-# ClaudeMeter Copilot Workspace Instructions
+# Agent Meter Copilot Workspace Instructions
 
 ## 🧩 What this repo is
 - Native macOS app written in Swift + SwiftUI, targeting macOS 14+.
 - Core architecture:
-  - `ClaudeMeter/Core/` for business logic: Managers, Services, Models, Protocols, Dependency injection
-  - `ClaudeMeter/UI/` for SwiftUI presentation (MenuBar, Popover, Settings)
-  - `ClaudeMeter/App/` for app lifecycle and state
-- Tests in `ClaudeMeterTests/` and `ClaudeMeterUITests/`.
+  - `AgentMeter/Core/` for business logic: Managers, Services, Models, Protocols, Dependency injection
+  - `AgentMeter/UI/` for SwiftUI presentation (MenuBar, Popover, Settings)
+  - `AgentMeter/App/` for app lifecycle and state
+- Tests in `AgentMeterTests/` and `AgentMeterUITests/`.
 
 ## 🚀 Build & test commands
-- `xcodebuild -scheme ClaudeMeter -configuration Release build`
-- `xcodebuild test -scheme ClaudeMeter`
+- `xcodebuild -scheme AgentMeter -configuration Release build`
+- `xcodebuild test -scheme AgentMeter`
 - `scripts/build-app.sh` (wrapper script; supports version input)
-- `open ClaudeMeter.xcodeproj` (Xcode 15+ expected)
+- `open AgentMeter.xcodeproj` (Xcode 15+ expected)
 
 ## 🏗️ Core conventions
 - Protocol-based external dependencies (`ApiServiceProtocol`, `KeychainServiceProtocol`, etc.).
@@ -28,10 +28,10 @@ description: "Workspace Copilot instructions for ClaudeMeter (macOS SwiftUI app)
 - License header is expected in all Swift files.
 
 ## 🧪 Testing guidelines
-- Unit tests in `ClaudeMeterTests/` mirror production structure (Managers/Services/Mocks).
+- Unit tests in `AgentMeterTests/` mirror production structure (Managers/Services/Mocks).
 - Mocks: `MockAPIService`, `MockKeychainService`, `MockCacheManager`, `MockNotificationService`, and `MockURLProtocol` for networking.
 - Keep tests deterministic (use dependency injection for time/network states), avoid async timeouts by explicit expectations.
-- Shared fixtures in `ClaudeMeterTests/TestUtilities/TestData.swift`.
+- Shared fixtures in `AgentMeterTests/TestUtilities/TestData.swift`.
 
 ## 🔍 PR and issue help
 - Prefer small changes with focused meaning and one goal (bugfix or feature), with regression tests when applicable.
@@ -49,6 +49,6 @@ description: "Workspace Copilot instructions for ClaudeMeter (macOS SwiftUI app)
 - If editing SwiftUI popovers or menu bar behavior, confirm whether app state should be shared via `AppState` vs local view model.
 
 ## 🛠️ Path-specific recomendations
-- `ClaudeMeter/Core/Managers/`: keep business logic independent of UI (avoid importing SwiftUI here; use Core types + publishers)
-- `ClaudeMeter/Core/Services/`: keep each service responsible for its own system integration and error translation.
-- `ClaudeMeter/UI/`: follow SwiftUI best practices (state lifting, view modules, and light controllers in ViewModels).
+- `AgentMeter/Core/Managers/`: keep business logic independent of UI (avoid importing SwiftUI here; use Core types + publishers)
+- `AgentMeter/Core/Services/`: keep each service responsible for its own system integration and error translation.
+- `AgentMeter/UI/`: follow SwiftUI best practices (state lifting, view modules, and light controllers in ViewModels).

@@ -214,7 +214,7 @@ class NotificationService: NotificationServiceProtocol {
     }
 
     private func providerName(_ providerID: ProviderID) -> String {
-        providerID == .claudeCode ? "Claude Code" : "Codex"
+        providerID.displayName
     }
 
     /// Check thresholds and return crossed ones for aggregation

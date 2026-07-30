@@ -109,6 +109,14 @@ enum Constants {
         static let serviceName = "Claude Code-credentials"
     }
 
+    // MARK: - Cursor Configuration
+    /// Contract for these values is not public; see `docs/providers/cursor.md`.
+    enum Cursor {
+        static let baseURL = "https://cursor.com"
+        static let keychainService = "cursor-access-token"
+        static let keychainAccount = "cursor-user"
+    }
+
     // MARK: - App Settings
     enum Settings {
         static let userDefaultsKey = "com.agentmeter.settings"

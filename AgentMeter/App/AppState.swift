@@ -429,7 +429,8 @@ final class AppState: ObservableObject {
                         ? nil
                         : settings.codexBinaryPath
                 )
-            )
+            ),
+            CursorProvider()
         ]
     }
 

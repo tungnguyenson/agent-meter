@@ -41,6 +41,11 @@
 		AMPROV002 /* CodexModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMSRC004; };
 		AMPROV003 /* CodexAppServerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMSRC005; };
 		AMPROV004 /* CodexProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMSRC006; };
+		AMPROV006 /* CursorModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMSRC010; };
+		AMPROV007 /* CursorSessionToken.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMSRC011; };
+		AMPROV008 /* CursorKeychainReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMSRC012; };
+		AMPROV009 /* CursorAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMSRC013; };
+		AMPROV010 /* CursorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMSRC014; };
 
 		/* UI MenuBar */
 		UIM001 /* StatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC015; };
@@ -166,6 +171,11 @@
 		AMSRC004 /* CodexModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexModels.swift; sourceTree = "<group>"; };
 		AMSRC005 /* CodexAppServerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAppServerClient.swift; sourceTree = "<group>"; };
 		AMSRC006 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
+		AMSRC010 /* CursorModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorModels.swift; sourceTree = "<group>"; };
+		AMSRC011 /* CursorSessionToken.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorSessionToken.swift; sourceTree = "<group>"; };
+		AMSRC012 /* CursorKeychainReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorKeychainReader.swift; sourceTree = "<group>"; };
+		AMSRC013 /* CursorAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorAPIClient.swift; sourceTree = "<group>"; };
+		AMSRC014 /* CursorProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorProvider.swift; sourceTree = "<group>"; };
 
 		/* UI MenuBar */
 		SRC015 /* StatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemController.swift; sourceTree = "<group>"; };
@@ -375,6 +385,7 @@
 			children = (
 				AMGRP002 /* ClaudeCode */,
 				AMGRP003 /* Codex */,
+				AMGRP004 /* Cursor */,
 			);
 			path = Providers;
 			sourceTree = "<group>";
@@ -396,6 +407,18 @@
 				AMSRC006 /* CodexProvider.swift */,
 			);
 			path = Codex;
+			sourceTree = "<group>";
+		};
+		AMGRP004 /* Cursor */ = {
+			isa = PBXGroup;
+			children = (
+				AMSRC010 /* CursorModels.swift */,
+				AMSRC011 /* CursorSessionToken.swift */,
+				AMSRC012 /* CursorKeychainReader.swift */,
+				AMSRC013 /* CursorAPIClient.swift */,
+				AMSRC014 /* CursorProvider.swift */,
+			);
+			path = Cursor;
 			sourceTree = "<group>";
 		};
 		GRP_UI /* UI */ = {
@@ -695,6 +718,11 @@
 				AMPROV002 /* CodexModels.swift in Sources */,
 				AMPROV003 /* CodexAppServerClient.swift in Sources */,
 				AMPROV004 /* CodexProvider.swift in Sources */,
+				AMPROV006 /* CursorModels.swift in Sources */,
+				AMPROV007 /* CursorSessionToken.swift in Sources */,
+				AMPROV008 /* CursorKeychainReader.swift in Sources */,
+				AMPROV009 /* CursorAPIClient.swift in Sources */,
+				AMPROV010 /* CursorProvider.swift in Sources */,
 				UIM001 /* StatusItemController.swift in Sources */,
 				UIP001 /* PopoverView.swift in Sources */,
 				UIP002 /* UsageCardView.swift in Sources */,

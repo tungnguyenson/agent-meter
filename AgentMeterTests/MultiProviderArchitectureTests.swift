@@ -156,6 +156,257 @@ final class CodexRateLimitsMappingTests: XCTestCase {
     }
 }
 
+final class CursorUsageMappingTests: XCTestCase {
+    /// Payload shape verified against the live `cursor.com/dashboard`
+    /// Spending page on 2026-07-30; see `docs/providers/cursor.md`.
+    func testMapProducesMetricsMatchingVerifiedSpendingPageValues() throws {
+        // Arrange
+        let json = """
+        {
+          "billingCycleStart": "2026-07-18T10:44:30.000Z",
+          "billingCycleEnd": "2026-08-18T10:44:30.000Z",
+          "membershipType": "pro",
+          "individualUsage": {
+            "plan": {
+              "enabled": true,
+              "breakdown": { "included": 2000, "bonus": 32047, "total": 34047 },
+              "autoPercentUsed": 100,
+              "apiPercentUsed": 88.888888888888,
+              "totalPercentUsed": 98.686956521739
+            },
+            "onDemand": { "enabled": true, "used": 0, "limit": 500 }
+          }
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            guard let date = formatter.date(from: try container.decode(String.self)) else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "bad date")
+            }
+            return date
+        }
+        let response = try decoder.decode(CursorUsageSummaryResponse.self, from: json)
+
+        // Act
+        let snapshot = CursorUsageMapper.map(response, fetchedAt: .distantPast)
+        let metricsByID = Dictionary(uniqueKeysWithValues: snapshot.metrics.map { ($0.id, $0) })
+
+        // Assert
+        XCTAssertEqual(snapshot.providerID, .cursor)
+        XCTAssertEqual(snapshot.planLabel, "pro")
+        XCTAssertEqual(metricsByID["cursor.plan.auto"]?.usedPercent, 100)
+        XCTAssertEqual(metricsByID["cursor.plan.api"]?.usedPercent ?? 0, 88.888888888888, accuracy: 0.0001)
+        XCTAssertEqual(
+            metricsByID["cursor.plan.auto"]?.windowDuration,
+            31 * 24 * 60 * 60,
+            "billingCycleEnd - billingCycleStart for the verified fixture is 31 days"
+        )
+        let onDemand = try XCTUnwrap(metricsByID["cursor.on-demand"])
+        XCTAssertEqual(onDemand.category, .credits)
+        XCTAssertEqual(onDemand.usedValue, 0, "cents-to-dollars: 0 cents used")
+        XCTAssertEqual(onDemand.limitValue, 5, "cents-to-dollars: 500 cents == $5 on-demand limit")
+        XCTAssertEqual(onDemand.unit, "USD")
+    }
+
+    func testOnDemandDisabledProducesNoCreditsMetric() throws {
+        // Arrange
+        let json = """
+        {
+          "membershipType": "free",
+          "individualUsage": {
+            "plan": { "enabled": true, "autoPercentUsed": 10, "apiPercentUsed": 0 },
+            "onDemand": { "enabled": false, "used": 0, "limit": 0 }
+          }
+        }
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(CursorUsageSummaryResponse.self, from: json)
+
+        // Act
+        let snapshot = CursorUsageMapper.map(response, fetchedAt: .distantPast)
+
+        // Assert
+        XCTAssertNil(snapshot.metric(id: "cursor.on-demand"))
+        XCTAssertEqual(snapshot.metrics.map(\.id).sorted(), ["cursor.plan.api", "cursor.plan.auto"])
+    }
+
+    func testUnknownFieldsDoNotPreventDecoding() throws {
+        // Arrange
+        let json = """
+        {
+          "futureField": { "anything": true },
+          "membershipType": "pro",
+          "autoModelSelectedDisplayMessage": "You've used 99% of your included total usage",
+          "individualUsage": {
+            "plan": { "enabled": true, "autoPercentUsed": 42, "futureField": 1 },
+            "onDemand": { "enabled": true, "used": 100, "limit": 500 }
+          }
+        }
+        """.data(using: .utf8)!
+
+        // Act
+        let response = try JSONDecoder().decode(CursorUsageSummaryResponse.self, from: json)
+        let snapshot = CursorUsageMapper.map(response, fetchedAt: .distantPast)
+
+        // Assert
+        XCTAssertEqual(snapshot.metric(id: "cursor.plan.auto")?.usedPercent, 42)
+        XCTAssertNil(snapshot.metric(id: "cursor.plan.api"), "apiPercentUsed absent from fixture")
+    }
+}
+
+final class CursorSessionTokenTests: XCTestCase {
+    private func makeJWT(claims: [String: Any]) -> String {
+        let header = try! JSONSerialization.data(withJSONObject: ["alg": "RS256", "typ": "JWT"])
+        let payload = try! JSONSerialization.data(withJSONObject: claims)
+        func base64URL(_ data: Data) -> String {
+            data.base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+        }
+        return "\(base64URL(header)).\(base64URL(payload)).signature"
+    }
+
+    func testDecodeExtractsSubjectAndExpiry() {
+        // Arrange
+        let jwt = makeJWT(claims: [
+            "sub": "google-oauth2|user_01JNRDXH3VAJ20W3XQW2NX8AD4",
+            "exp": 1_786_971_980
+        ])
+
+        // Act
+        let token = CursorSessionToken.decode(jwt)
+
+        // Assert
+        XCTAssertEqual(token?.subject, "google-oauth2|user_01JNRDXH3VAJ20W3XQW2NX8AD4")
+        XCTAssertEqual(token?.expiresAt, Date(timeIntervalSince1970: 1_786_971_980))
+    }
+
+    func testDecodeReturnsNilForMalformedToken() {
+        XCTAssertNil(CursorSessionToken.decode("not-a-jwt"))
+        XCTAssertNil(CursorSessionToken.decode(""))
+        XCTAssertNil(CursorSessionToken.decode("only.two"))
+    }
+
+    func testDecodeReturnsNilWhenSubjectClaimMissing() {
+        let jwt = makeJWT(claims: ["exp": 1_786_971_980])
+        XCTAssertNil(CursorSessionToken.decode(jwt))
+    }
+}
+
+final class CursorProviderAuthenticationTests: XCTestCase {
+    func testConfigurationStatusIsAuthenticationRequiredWithoutCredentials() async {
+        // Arrange
+        let provider = CursorProvider(
+            credentialsReader: StubCursorCredentialsReader(result: .success(nil)),
+            apiClient: StubCursorAPIClient(result: .failure(CursorAPIError.unauthorized))
+        )
+
+        // Act
+        let status = await provider.configurationStatus()
+
+        // Assert
+        guard case .authenticationRequired = status else {
+            return XCTFail("Expected authenticationRequired, got \(status)")
+        }
+    }
+
+    func testConfigurationStatusIsAuthenticationRequiredWhenTokenExpired() async {
+        // Arrange
+        let jwt = makeExpiredJWT()
+        let provider = CursorProvider(
+            credentialsReader: StubCursorCredentialsReader(result: .success(jwt)),
+            apiClient: StubCursorAPIClient(result: .failure(CursorAPIError.unauthorized))
+        )
+
+        // Act
+        let status = await provider.configurationStatus()
+
+        // Assert
+        guard case .authenticationRequired = status else {
+            return XCTFail("Expected authenticationRequired, got \(status)")
+        }
+    }
+
+    func testFetchSnapshotMapsUsageWhenSessionIsValid() async throws {
+        // Arrange
+        let jwt = makeValidJWT(subject: "google-oauth2|user_test")
+        let summary = CursorUsageSummaryResponse(
+            billingCycleStart: nil,
+            billingCycleEnd: nil,
+            membershipType: "pro",
+            individualUsage: CursorIndividualUsage(
+                plan: CursorPlanUsage(
+                    enabled: true,
+                    breakdown: nil,
+                    autoPercentUsed: 55,
+                    apiPercentUsed: nil,
+                    totalPercentUsed: nil
+                ),
+                onDemand: nil
+            )
+        )
+        let apiClient = StubCursorAPIClient(result: .success(summary))
+        let provider = CursorProvider(
+            credentialsReader: StubCursorCredentialsReader(result: .success(jwt)),
+            apiClient: apiClient
+        )
+
+        // Act
+        let snapshot = try await provider.fetchSnapshot()
+
+        // Assert
+        XCTAssertEqual(snapshot.providerID, .cursor)
+        XCTAssertEqual(snapshot.metric(id: "cursor.plan.auto")?.usedPercent, 55)
+        let receivedSubject = await apiClient.receivedSubject
+        XCTAssertEqual(receivedSubject, "google-oauth2|user_test")
+    }
+
+    private func makeValidJWT(subject: String) -> String {
+        makeJWT(claims: ["sub": subject, "exp": Date().addingTimeInterval(3600).timeIntervalSince1970])
+    }
+
+    private func makeExpiredJWT() -> String {
+        makeJWT(claims: ["sub": "google-oauth2|user_test", "exp": Date().addingTimeInterval(-3600).timeIntervalSince1970])
+    }
+
+    private func makeJWT(claims: [String: Any]) -> String {
+        let header = try! JSONSerialization.data(withJSONObject: ["alg": "RS256", "typ": "JWT"])
+        let payload = try! JSONSerialization.data(withJSONObject: claims)
+        func base64URL(_ data: Data) -> String {
+            data.base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+        }
+        return "\(base64URL(header)).\(base64URL(payload)).signature"
+    }
+}
+
+private struct StubCursorCredentialsReader: CursorCredentialsReading {
+    let result: Result<String?, Error>
+
+    func readAccessToken() throws -> String? {
+        try result.get()
+    }
+}
+
+private actor StubCursorAPIClient: CursorAPIServing {
+    private let result: Result<CursorUsageSummaryResponse, Error>
+    private(set) var receivedSubject: String?
+
+    init(result: Result<CursorUsageSummaryResponse, Error>) {
+        self.result = result
+    }
+
+    func fetchUsageSummary(sessionToken: String, subject: String) async throws -> CursorUsageSummaryResponse {
+        receivedSubject = subject
+        return try result.get()
+    }
+}
+
 final class CodexJSONRPCResponseDecoderTests: XCTestCase {
     private struct AccountResult: Decodable, Equatable {
         let accountType: String
@@ -517,6 +768,10 @@ final class AppSettingsMultiProviderMigrationTests: XCTestCase {
         XCTAssertEqual(
             original.pinnedMetricIDsByProvider[.codex],
             ["codex.codex.primary", "codex.codex.secondary"]
+        )
+        XCTAssertEqual(
+            original.pinnedMetricIDsByProvider[.cursor],
+            ["cursor.plan.auto", "cursor.plan.api"]
         )
         XCTAssertEqual(
             thirdUpdate.pinnedMetricIDsByProvider[.codex],
