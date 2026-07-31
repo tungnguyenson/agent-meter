@@ -4,8 +4,8 @@ A native macOS menu bar app for monitoring subscription usage and rate limits
 across coding agents. The first supported providers are Claude Code and Codex.
 
 <p align="center">
-  <img src="screenshot.png" alt="Light Mode" width="45%" />
-  <img src="screenshot-2.png" alt="Dark Mode" width="45%" />
+  <img src="screenshots/popover-light.png" alt="Light Mode" width="45%" />
+  <img src="screenshots/popover-dark.png" alt="Dark Mode" width="45%" />
 </p>
 
 ## Features
