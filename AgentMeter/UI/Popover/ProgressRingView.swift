@@ -13,11 +13,20 @@ struct ProgressRingView: View {
     var color: Color
     var lineWidth: CGFloat = 8
     var size: CGFloat = 80
-    
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// A colored track at a fixed opacity reads noticeably fainter on a light
+    /// window background than a dark one, so light mode gets a stronger tint
+    /// to keep the unfilled portion of the ring visible.
+    private var trackOpacity: Double {
+        colorScheme == .dark ? 0.12 : 0.2
+    }
+
     var body: some View {
         ZStack {
             Circle()
-                .stroke(color.opacity(0.12), lineWidth: lineWidth)
+                .stroke(color.opacity(trackOpacity), lineWidth: lineWidth)
             
             Circle()
                 .trim(from: 0.0, to: min(progress, 1.0))

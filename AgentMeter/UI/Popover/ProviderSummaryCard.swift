@@ -43,7 +43,7 @@ struct ProviderSummaryCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                .stroke(ColorTheme.cardBorder, lineWidth: 0.5)
         )
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .onTapGesture(perform: onOpenDetail)

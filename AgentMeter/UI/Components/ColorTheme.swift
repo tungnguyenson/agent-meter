@@ -13,17 +13,45 @@ import SwiftUI
 enum ColorTheme {
     // MARK: - Usage Colors
 
-    /// Green - Low usage (0-50%)
-    static let green = Color(red: 52/255, green: 199/255, blue: 89/255)  // #34C759
+    /// Builds a `Color` that resolves to a different RGB value per appearance.
+    /// The usage colors below double as both ring/text tint, and the flat
+    /// Apple system-tint values (tuned to pop against a dark menu bar) measure
+    /// under 2:1 contrast against the popover's light gray provider cards —
+    /// well short of the 4.5:1 WCAG AA minimum for text. `light` swaps in a
+    /// darker, more saturated shade there; `dark` keeps the original vivid one.
+    private static func adaptiveColor(light: NSColor, dark: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        })
+    }
 
-    /// Yellow - Medium usage (50-75%)
-    static let yellow = Color(red: 255/255, green: 204/255, blue: 0/255)  // #FFCC00
+    /// Green - Low usage (0-50%). Light variant is GitHub Primer's accessible
+    /// "success" green (#1A7F37, ~5:1 on white); dark keeps Apple's #34C759.
+    static let green = adaptiveColor(
+        light: NSColor(red: 26/255, green: 127/255, blue: 55/255, alpha: 1),
+        dark: NSColor(red: 52/255, green: 199/255, blue: 89/255, alpha: 1)
+    )
 
-    /// Orange - High usage (75-90%)
-    static let orange = Color(red: 230/255, green: 126/255, blue: 0/255)  // #E67E00
+    /// Yellow - Medium usage (50-75%). Light variant is Primer's "attention"
+    /// gold (#9A6700, ~4.9:1 on white); dark keeps Apple's #FFCC00.
+    static let yellow = adaptiveColor(
+        light: NSColor(red: 154/255, green: 103/255, blue: 0/255, alpha: 1),
+        dark: NSColor(red: 255/255, green: 204/255, blue: 0/255, alpha: 1)
+    )
 
-    /// Red - Critical usage (90-100%)
-    static let red = Color(red: 255/255, green: 59/255, blue: 48/255)  // #FF3B30
+    /// Orange - High usage (75-90%). Light variant is Primer's "severe"
+    /// orange (#BC4C00, ~5:1 on white); dark keeps the original #E67E00.
+    static let orange = adaptiveColor(
+        light: NSColor(red: 188/255, green: 76/255, blue: 0/255, alpha: 1),
+        dark: NSColor(red: 230/255, green: 126/255, blue: 0/255, alpha: 1)
+    )
+
+    /// Red - Critical usage (90-100%). Light variant is Primer's "danger"
+    /// red (#CF222E, ~5.4:1 on white); dark keeps Apple's #FF3B30.
+    static let red = adaptiveColor(
+        light: NSColor(red: 207/255, green: 34/255, blue: 46/255, alpha: 1),
+        dark: NSColor(red: 255/255, green: 59/255, blue: 48/255, alpha: 1)
+    )
 
     // MARK: - UI Colors
 
@@ -36,6 +64,13 @@ enum ColorTheme {
 
     /// Secondary text color
     static let secondaryText = Color(nsColor: .secondaryLabelColor)
+
+    /// Border color for card outlines and progress track backgrounds.
+    /// `.separatorColor` is tuned by AppKit to stay visible on both light and
+    /// dark window backgrounds — a fixed opacity on `.primary` reads far
+    /// fainter on white than on near-black, since equal alpha steps aren't
+    /// equally visible in both directions.
+    static let cardBorder = Color(nsColor: .separatorColor)
 
     // MARK: - Glass Effect Colors
 

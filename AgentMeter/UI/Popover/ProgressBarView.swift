@@ -61,7 +61,7 @@ struct ProgressBarView: View {
                 ZStack(alignment: .leading) {
                     // Background
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(Color.primary.opacity(0.08))
+                        .fill(ColorTheme.cardBorder)
 
                     // Progress
                     RoundedRectangle(cornerRadius: cornerRadius)
@@ -163,7 +163,7 @@ struct CircularProgressBar: View {
         ZStack {
             // Background circle
             Circle()
-                .stroke(Color.primary.opacity(0.08), lineWidth: lineWidth)
+                .stroke(ColorTheme.cardBorder, lineWidth: lineWidth)
 
             // Progress arc
             Circle()

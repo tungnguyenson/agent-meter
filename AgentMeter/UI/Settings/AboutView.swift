@@ -38,7 +38,7 @@ struct AboutView: View {
                     .padding(.vertical, 4)
 
                 // Description
-                Text("A macOS menu bar app for monitoring Claude Code usage limits.")
+                Text("A macOS menu bar app for monitoring subscription usage across coding agents (Claude Code, Codex, Cursor).")
                     .multilineTextAlignment(.center)
                     .font(.body)
                     .foregroundColor(.secondary)
@@ -50,7 +50,7 @@ struct AboutView: View {
                     .frame(height: 8)
 
                 // Copyright
-                Text("© 2026 puq.ai. All rights reserved.")
+                Text("© 2026 Agent Meter · MIT License · Originally by ali@puq.ai")
                     .font(.caption)
                     .foregroundStyle(.secondary.opacity(0.7))
             }

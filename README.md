@@ -172,9 +172,10 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ## Acknowledgments
 
+- Forked from [puq-ai/claude-meter](https://github.com/puq-ai/claude-meter) by Ali Yilmaz ([puq.ai](https://puq.ai))
 - Claude Code integration expanded to support multiple providers (Codex)
 - Codex integration uses the locally installed Codex CLI app-server
 
 ---
 
-**Developed by ali@[puq.ai](https://puq.ai)**
+**Originally developed by ali@[puq.ai](https://puq.ai)**

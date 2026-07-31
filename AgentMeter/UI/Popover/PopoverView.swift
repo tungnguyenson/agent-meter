@@ -493,7 +493,7 @@ struct PopoverView: View {
         .frame(maxWidth: .infinity)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                .stroke(ColorTheme.cardBorder, lineWidth: 0.5)
         )
     }
 
@@ -578,7 +578,7 @@ struct PopoverView: View {
         .frame(maxWidth: .infinity)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                .stroke(ColorTheme.cardBorder, lineWidth: 0.5)
         )
         .shadow(color: isCritical ? progressColor.opacity(0.3) : .clear, radius: isCritical ? 8 : 0)
     }
