@@ -1,14 +1,15 @@
 # Agent Meter multi-provider spec
 
-## Mục tiêu
+## Goal
 
-Agent Meter là macOS menu-bar app theo dõi subscription quota của nhiều coding
-agent. v1 mở rộng từ phiên bản trước sang Agent Meter, giữ đầy đủ hành vi
-Claude đã dùng và thêm Codex qua local app-server.
+Agent Meter is a macOS menu-bar app that tracks subscription quota across
+multiple coding agents. v1 extends the previous version into Agent Meter,
+preserving all existing Claude behavior and adding Codex via the local
+app-server.
 
-Thành công khi người dùng bật cả hai provider, chuyển provider trong popover,
-xem quota/reset/health, pin tối đa hai metric lên menu bar, và một provider lỗi
-không ảnh hưởng provider còn lại.
+Success means a user can enable both providers, switch providers in the
+popover, view quota/reset/health, pin up to two metrics to the menu bar, and
+have a failure in one provider not affect the other.
 
 ## Domain model
 
@@ -49,92 +50,104 @@ protocol UsageProvider {
 }
 ```
 
-Yêu cầu model:
+Model requirements:
 
-- `ProviderID` và metric ID là string ổn định, namespaced theo provider khi lưu.
-- Không có enum subscription plan dùng chung; unknown plan giữ nguyên label.
-- Metric percentage và value/limit đều optional vì provider capability khác nhau.
-- Forecast chỉ chạy khi có percentage, reset và window duration hợp lệ.
-- Mapper clamp presentation vào `0...100` nhưng giữ raw diagnostic đã redact để
-  phát hiện upstream drift; không silently đổi `0.5` thành `50%` nếu provider
-  contract nói đó đã là percent.
+- `ProviderID` and metric IDs are stable strings, namespaced by provider when
+  stored.
+- There is no shared subscription-plan enum; an unknown plan keeps its raw
+  label.
+- Both percentage and value/limit metrics are optional, since provider
+  capabilities differ.
+- Forecast only runs when percentage, reset, and window duration are all
+  valid.
+- The mapper clamps the presentation value to `0...100` but keeps a redacted
+  raw diagnostic to catch upstream drift; it must not silently turn `0.5`
+  into `50%` if the provider contract says that value is already a percent.
 
 ## Provider behavior
 
 ### Claude Code
 
-- Cô lập credential reader, OAuth client, experimental web client và DTO mapper.
-- Giữ OAuth-first, cache fallback và rate-limit cooldown hiện tại.
-- Map mọi field đã biết thành metric; không làm toàn snapshot fail vì field lạ.
-- Migrate web session secret sang Agent Meter-owned Keychain.
-- Giữ Claude-specific settings cho Sonnet, Design và Extra Usage bằng metric
-  visibility thay vì boolean hard-code trong global settings.
+- Isolate the credential reader, OAuth client, experimental web client, and
+  DTO mapper.
+- Keep the current OAuth-first flow, cache fallback, and rate-limit cooldown.
+- Map every known field to a metric; an unknown field must not fail the
+  whole snapshot.
+- Migrate the web session secret to an Agent Meter-owned Keychain.
+- Keep Claude-specific settings for Sonnet, Design, and Extra Usage via
+  metric visibility instead of hard-coded booleans in global settings.
 
 ### Codex
 
-- Resolve binary; minimum tested version `0.146.0`.
-- Một long-lived `codex app-server` subprocess; stdio là transport mặc định.
-- Handshake trước mọi account method.
-- Fetch `account/read`, `account/rateLimits/read` và best-effort
+- Resolve the binary; minimum tested version `0.146.0`.
+- One long-lived `codex app-server` subprocess; stdio is the default
+  transport.
+- Handshake before any account method call.
+- Fetch `account/read`, `account/rateLimits/read`, and best-effort
   `account/usage/read`.
-- Merge sparse rate-limit notifications hoặc refetch khi không chắc chắn.
-- Không đọc auth file, không direct HTTP, không dùng write/action account methods.
-- API key, Bedrock, OSS/local mode hiện “Subscription quota unavailable”.
+- Merge sparse rate-limit notifications, or refetch when uncertain.
+- No reading of auth files, no direct HTTP, no write/action account methods.
+- API key, Bedrock, and OSS/local mode show "Subscription quota unavailable".
 
-## Coordinator và state
+## Coordinator and state
 
-Coordinator giữ state keyed theo `ProviderID`:
+The coordinator keeps state keyed by `ProviderID`:
 
 ```text
 disabled | unavailable | loading | ready | stale | error
 ```
 
-Mỗi provider có snapshot, error, last success, active fetch, auth gate,
-rate-limit cooldown và retry/backoff độc lập. Refresh-all chạy song song. Partial
-success được publish ngay; không xóa snapshot cũ khi refresh mới lỗi.
+Each provider has its own snapshot, error, last success, active fetch, auth
+gate, rate-limit cooldown, and retry/backoff. Refresh-all runs in parallel.
+Partial success is published immediately; a failed refresh does not clear the
+previous snapshot.
 
-Provider selected chỉ điều khiển popover/menu bar, không ngăn provider khác poll.
-Khi app ở background, cadence có thể chậm hơn nhưng vẫn độc lập. Notification key:
+The selected provider only controls the popover/menu bar; it does not stop
+other providers from polling. When the app is in the background, cadence may
+slow down but stays independent per provider. Notification key:
 
 ```text
 <provider-id>:<metric-id>:<threshold>
 ```
 
-để không collision giữa provider/window.
+to avoid collisions across providers/windows.
 
 ## UX
 
 ### Popover
 
-- Header “Agent Meter”.
-- Provider picker hiển thị icon, tên, health dot và last-updated state.
-- Nội dung là danh sách metric card động của provider đang chọn.
-- Percentage window hiển thị usage, reset countdown và forecast.
-- Value/limit metric hiển thị số, unit và progress nếu tính được.
-- Stale snapshot vẫn hiển thị với timestamp và lỗi không che mất dữ liệu cũ.
-- Empty/unsupported/auth states có copy riêng, không gộp thành “not logged in”.
+- Header "Agent Meter".
+- Provider picker shows icon, name, health dot, and last-updated state.
+- Content is a dynamic list of metric cards for the selected provider.
+- Percentage windows show usage, reset countdown, and forecast.
+- Value/limit metrics show the number, unit, and progress if computable.
+- Stale snapshots still display with a timestamp; errors don't hide old data.
+- Empty/unsupported/auth states have their own copy, not merged into a
+  generic "not logged in".
 
 ### Menu bar
 
-Giữ ba mode Icon, Compact và Detailed. Menu bar dùng selected provider và tối đa
-hai pinned metric:
+Keep the three modes Icon, Compact, and Detailed. The menu bar uses the
+selected provider and up to two pinned metrics:
 
-- nếu pin còn tồn tại, render theo thứ tự setting;
-- nếu metric biến mất, fallback sang hai percentage metric đầu tiên;
-- nếu không có metric, hiển thị provider icon và trạng thái `--`;
-- countdown lấy window duration/reset từ metric, không hard-code theo provider.
+- if the pinned metrics still exist, render them in the configured order;
+- if a metric disappears, fall back to the first two percentage metrics;
+- if there are no metrics, show the provider icon and a `--` state;
+- countdown uses window duration/reset from the metric, not hard-coded per
+  provider.
 
 ### Settings
 
-Global: launch at login, Dock, appearance, polling, notifications và custom
-colors.
+Global: launch at login, Dock, appearance, polling, notifications, and
+custom colors.
 
-Provider section: enabled, binary/path hoặc experimental configuration, metric
-visibility và pinning. Secret field không round-trip qua `AppSettings`.
+Provider section: enabled, binary/path or experimental configuration, metric
+visibility, and pinning. Secret fields do not round-trip through
+`AppSettings`.
 
-## Persistence và migration
+## Persistence and migration
 
-Settings/cache schema tăng lên v2:
+Settings/cache schema bumps to v2:
 
 ```text
 enabledProviderIDs
@@ -144,40 +157,50 @@ pinnedMetricIDs[providerID]       // max 2
 provider cache[providerID]
 ```
 
-One-time migration từ phiên bản trước:
+One-time migration from the previous version:
 
-1. Import display mode/style, color scheme, Dock/login, polling, notification và
-   custom color settings.
-2. Bật Claude provider và chọn Claude nếu chưa có lựa chọn.
-3. Map Sonnet/Design/Extra Usage toggles thành metric visibility.
-4. Import Claude cache v1 nếu decode được; lỗi migration không crash launch.
-5. Ghi `webSessionKey` vào Agent Meter-owned Keychain, xác nhận write thành
-   công, sau đó xóa secret khỏi settings/UserDefaults.
-6. Không copy OAuth token hoặc refresh token của Claude Code.
+1. Import display mode/style, color scheme, Dock/login, polling,
+   notification, and custom color settings.
+2. Enable the Claude provider and select it if nothing is selected yet.
+3. Map the Sonnet/Design/Extra Usage toggles to metric visibility.
+4. Import the Claude v1 cache if it decodes successfully; a migration failure
+   must not crash launch.
+5. Write `webSessionKey` into the Agent Meter-owned Keychain, confirm the
+   write succeeded, then remove the secret from settings/UserDefaults.
+6. Do not copy Claude Code's OAuth token or refresh token.
 
-Migration idempotent và ghi version chỉ sau khi các bước bắt buộc hoàn tất.
+Migration is idempotent and only writes the new version after all required
+steps complete.
 
-## Error và security requirements
+## Error and security requirements
 
-- User-facing error phân biệt: binary missing, unsupported version, not signed
-  in, quota unavailable for auth mode, rate-limited, network, protocol, decode.
-- Diagnostic có provider/method/request ID nhưng redact secret, email, account ID,
-  cookie, header và raw response chứa PII.
-- Cache file không chứa credential; sensitive Keychain item chỉ app được đọc.
-- Subprocess path phải là file executable đã resolve; không xây shell command từ
-  user input.
-- Không dùng `sh -c`; truyền executable URL và argv trực tiếp.
-- App không thực hiện login/logout, purchase, email nudge hay credit redemption.
+- User-facing errors distinguish: binary missing, unsupported version, not
+  signed in, quota unavailable for the auth mode, rate-limited, network,
+  protocol, decode.
+- Diagnostics include provider/method/request ID but redact secrets, email,
+  account ID, cookies, headers, and any raw response containing PII.
+- Cache files contain no credentials; sensitive Keychain items are readable
+  only by this app.
+- The subprocess path must be a resolved executable file; never build a
+  shell command from user input.
+- No `sh -c`; pass the executable URL and argv directly.
+- The app never performs login/logout, purchases, email nudges, or credit
+  redemption.
 
 ## Acceptance criteria
 
-1. Claude UI/menu bar/notification/cache hiện có không regression.
-2. ChatGPT-authenticated Codex trả quota card với percent, duration và reset qua
-   app-server.
-3. Claude và Codex cùng enabled; một bên lỗi, bên kia vẫn poll/refresh/display.
-4. Restart app phục hồi per-provider cache và cooldown đúng namespace.
-5. Unknown plan/metric/notification không crash và không bị giả thành giá trị
-   mặc định sai.
-6. Không còn Claude web secret trong UserDefaults, log hoặc cache.
-7. Không có direct OpenAI private endpoint hay read `~/.codex/auth.json`.
-8. Unit, integration và critical UI flow pass; coverage tối thiểu 80%.
+1. Existing Claude UI/menu bar/notification/cache behavior has no
+   regression.
+2. A ChatGPT-authenticated Codex account returns a quota card with percent,
+   duration, and reset via app-server.
+3. With Claude and Codex both enabled, a failure in one still lets the other
+   poll/refresh/display.
+4. Restarting the app restores per-provider cache and cooldown with correct
+   namespacing.
+5. Unknown plan/metric/notification values do not crash and are not silently
+   defaulted to the wrong value.
+6. No Claude web secret remains in UserDefaults, logs, or cache.
+7. No direct OpenAI private endpoint calls and no reading of
+   `~/.codex/auth.json`.
+8. Unit, integration, and critical UI flow tests pass; coverage is at least
+   80%.

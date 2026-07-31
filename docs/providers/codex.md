@@ -1,58 +1,60 @@
 # Codex provider
 
-## Kết luận tích hợp
+## Integration verdict
 
-Codex hỗ trợ tích hợp quota khả thi thông qua `codex app-server`. Đây là local
-interface mà OpenAI dùng để xây rich client như VS Code extension. App-server
-trao đổi JSON-RPC hai chiều qua JSONL trên stdio và công bố các account methods
-cần thiết cho Agent Meter.
+Codex supports a feasible quota integration through `codex app-server`. This
+is the local interface OpenAI uses to build rich clients like the VS Code
+extension. The app-server exchanges bidirectional JSON-RPC over JSONL on
+stdio and publishes the account methods Agent Meter needs.
 
-Nguồn chính:
+Primary sources:
 
 - [OpenAI Codex app-server protocol](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
 - [Codex app-server protocol types](https://github.com/openai/codex/tree/main/codex-rs/app-server-protocol/src/protocol)
 
-Đánh giá local ngày 2026-07-29 xác nhận `codex-cli 0.146.0` có
-`codex app-server`, stdio là transport mặc định, và CLI vẫn gắn nhãn command này
-là `experimental`. Vì vậy đây là **official local contract với stability risk
-trung bình**, không phải public HTTP API có versioning độc lập.
+A local assessment on 2026-07-29 confirmed `codex-cli 0.146.0` has
+`codex app-server`, stdio is the default transport, and the CLI still labels
+this command `experimental`. This is therefore an **official local contract
+with medium stability risk**, not a public HTTP API with independent
+versioning.
 
 ## Security boundary
 
-Agent Meter chạy binary Codex mà người dùng đã cài và giao tiếp với subprocess:
+Agent Meter runs the Codex binary the user already installed and
+communicates with it as a subprocess:
 
 ```text
 Agent Meter ⇄ stdin/stdout JSONL ⇄ codex app-server ⇄ OpenAI
 ```
 
-Agent Meter không:
+Agent Meter does not:
 
-- đọc hoặc parse `~/.codex/auth.json`;
-- copy OAuth/API key vào settings, log hoặc cache;
-- gọi trực tiếp private OpenAI backend endpoint;
-- bắt đầu login, logout hoặc đổi account;
-- gọi `account/rateLimitResetCredit/consume`;
-- gửi email nudge hoặc thực hiện hành động làm thay đổi account.
+- read or parse `~/.codex/auth.json`;
+- copy the OAuth/API key into settings, logs, or cache;
+- call OpenAI's private backend endpoint directly;
+- initiate login, logout, or account switching;
+- call `account/rateLimitResetCredit/consume`;
+- send email nudges or perform any action that changes the account.
 
-Codex sở hữu credential storage, token refresh và backend authentication. Agent
-Meter chỉ dùng read methods.
+Codex owns credential storage, token refresh, and backend authentication.
+Agent Meter only uses read methods.
 
 ## Process lifecycle
 
-1. Resolve binary từ path người dùng cấu hình, `PATH`, rồi các vị trí cài đặt
-   Homebrew/NVM phổ biến.
-2. Chạy `codex app-server`; stdio là transport mặc định.
-3. Gửi `initialize`, đợi response thành công, rồi gửi notification
-   `initialized`.
-4. Giữ một subprocess sống lâu cho provider; dùng request ID tăng đơn điệu để
-   ghép response với request đang chờ.
-5. Đọc từng dòng stdout như một JSON message. Stderr chỉ dùng cho diagnostic đã
-   redact, không trộn vào protocol parser.
-6. Khi process exit hoặc protocol hỏng, fail các request đang chờ, giữ snapshot
-   cache và restart với exponential backoff có giới hạn.
+1. Resolve the binary from the user-configured path, `PATH`, then common
+   Homebrew/NVM install locations.
+2. Run `codex app-server`; stdio is the default transport.
+3. Send `initialize`, wait for a successful response, then send the
+   `initialized` notification.
+4. Keep one long-lived subprocess per provider; use a monotonically
+   increasing request ID to match responses to pending requests.
+5. Read each stdout line as one JSON message. Stderr is used only for
+   redacted diagnostics, never mixed into the protocol parser.
+6. When the process exits or the protocol breaks, fail pending requests,
+   keep the cached snapshot, and restart with bounded exponential backoff.
 
-Mọi request phải có timeout. Unknown notification hoặc field phải được bỏ qua
-an toàn để app-server có thể phát triển mà không làm crash client.
+Every request must have a timeout. Unknown notifications or fields must be
+safely ignored so the app-server can evolve without crashing the client.
 
 ## Read methods
 
@@ -62,21 +64,22 @@ an toàn để app-server có thể phát triển mà không làm crash client.
 {"method":"account/read","id":1,"params":{"refreshToken":false}}
 ```
 
-Dùng để xác định:
+Used to determine:
 
-- có account hay không;
-- Codex có yêu cầu OpenAI auth hay không;
-- auth mode;
-- plan type khi backend cung cấp.
+- whether an account exists;
+- whether Codex requires OpenAI auth;
+- the auth mode;
+- the plan type when the backend provides it.
 
-Agent Meter đặt `refreshToken: false`: một quota viewer không nên chủ động thay
-đổi auth state. `account/updated` làm provider invalidated và kích hoạt refetch.
+Agent Meter sets `refreshToken: false`: a quota viewer should not proactively
+change auth state. `account/updated` invalidates the provider and triggers a
+refetch.
 
-Các auth mode được protocol công bố gồm ChatGPT managed, API key, personal access
-token và Amazon Bedrock experimental. Subscription quota chỉ có ý nghĩa khi
-app-server trả ChatGPT rate limits. API-key-only, Bedrock hoặc local/OSS mode
-phải hiện trạng thái “Subscription quota unavailable”, không biến thành lỗi
-đăng nhập giả.
+The auth modes published by the protocol include ChatGPT managed, API key,
+personal access token, and Amazon Bedrock (experimental). Subscription quota
+only makes sense when the app-server returns ChatGPT rate limits. API-key-only,
+Bedrock, or local/OSS mode must show "Subscription quota unavailable" rather
+than a fake login error.
 
 ### `account/rateLimits/read`
 
@@ -84,16 +87,16 @@ phải hiện trạng thái “Subscription quota unavailable”, không biến 
 {"method":"account/rateLimits/read","id":2}
 ```
 
-Response có thể chứa:
+The response may contain:
 
-- `rateLimits` tương thích ngược;
-- nhiều limit trong `rateLimitsByLimitId`;
-- `primary` và `secondary` window;
-- `usedPercent`, `windowDurationMins`, `resetsAt` Unix seconds;
+- `rateLimits` for backward compatibility;
+- multiple limits under `rateLimitsByLimitId`;
+- `primary` and `secondary` windows;
+- `usedPercent`, `windowDurationMins`, `resetsAt` in Unix seconds;
 - plan/limit identifiers;
-- credit balance hoặc effective monthly limit khi có;
+- credit balance or effective monthly limit when available;
 - `spendControlReached`;
-- earned reset-credit snapshot.
+- an earned reset-credit snapshot.
 
 Mapping:
 
@@ -102,54 +105,55 @@ usedPercent         → UsageMetric.usedPercent
 windowDurationMins  → UsageMetric.windowDuration
 resetsAt            → UsageMetric.resetsAt
 limit id + window   → provider-local stable metric ID
-credit fields       → value/limit metric hoặc provider status
+credit fields       → value/limit metric or provider status
 ```
 
-Ưu tiên `rateLimitsByLimitId`; chỉ fallback `rateLimits` nếu collection mới
-không có dữ liệu. Không hard-code “5 giờ” hoặc “7 ngày”: label được suy ra từ
-window duration/metadata trả về.
+Prefer `rateLimitsByLimitId`; only fall back to `rateLimits` if the newer
+collection has no data. Don't hard-code "5 hours" or "7 days": the label is
+derived from the window duration/metadata returned.
 
 ### `account/rateLimits/updated`
 
-Đây là notification **sparse**, không phải snapshot hoàn chỉnh. Provider phải
-merge field có mặt vào snapshot gần nhất; `null` metadata trong update không
-được tự động xóa giá trị đã biết. Khi merge không đảm bảo đúng hoặc limit set
-thay đổi, gọi lại `account/rateLimits/read`.
+This is a **sparse** notification, not a full snapshot. The provider must
+merge present fields into the latest snapshot; `null` metadata in an update
+must not automatically clear known values. When the merge isn't certain to
+be correct, or the limit set changes, call `account/rateLimits/read` again.
 
-Reset-credit data là snapshot-only. Agent Meter có thể hiển thị số lượng nếu
-product spec sau này yêu cầu, nhưng v1 không redeem.
+Reset-credit data is snapshot-only. Agent Meter may display the amount if a
+future product spec requires it, but v1 does not redeem it.
 
 ### `account/usage/read`
 
-Method này trả token-activity summary và daily buckets ở cấp account. Đây là dữ
-liệu bổ trợ, không thay thế subscription rate-limit. V1 fetch để chứng minh
-capability và chuẩn bị model, nhưng UI quota ưu tiên `account/rateLimits/read`.
-Nếu method không được hỗ trợ ở binary/account hiện tại, provider vẫn hoạt động
-với rate limits.
+This method returns a token-activity summary and daily buckets at the
+account level. This is supplementary data, not a replacement for the
+subscription rate limit. v1 fetches it to prove the capability and prepare
+the model, but the quota UI prioritizes `account/rateLimits/read`. If the
+method isn't supported on the current binary/account, the provider still
+works with rate limits alone.
 
-## Stability và compatibility
+## Stability and compatibility
 
-| Rủi ro | Mức | Cách xử lý |
+| Risk | Level | Handling |
 |---|---|---|
-| `app-server` còn experimental trong CLI help | Trung bình | Pin minimum tested version, schema fixtures, capability errors rõ |
-| Protocol thêm field/notification | Thấp | Tolerant decode, ignore unknown |
-| Method thiếu ở CLI cũ | Trung bình | Preflight version và unsupported-method state |
-| Sparse update làm mất metadata | Cao nếu merge sai | Merge present fields hoặc refetch snapshot |
-| Subprocess treo/chết | Trung bình | Timeout, cancel pending calls, capped restart backoff |
-| API-key/Bedrock không có ChatGPT quota | Dự kiến | Provider available nhưng subscription quota unavailable |
+| `app-server` still marked experimental in CLI help | Medium | Pin a minimum tested version, schema fixtures, clear capability errors |
+| Protocol adds fields/notifications | Low | Tolerant decode, ignore unknown |
+| Method missing on an older CLI | Medium | Version preflight and an unsupported-method state |
+| Sparse update loses metadata | High if merged incorrectly | Merge present fields or refetch the snapshot |
+| Subprocess hangs/dies | Medium | Timeout, cancel pending calls, capped restart backoff |
+| API-key/Bedrock has no ChatGPT quota | Expected | Provider available but subscription quota unavailable |
 
-Minimum tested version cho v1 là `0.146.0`. Không tuyên bố version cũ hơn không
-thể hoạt động; app chỉ từ chối version chưa được kiểm thử để tránh phụ thuộc
-schema không xác định.
+The minimum tested version for v1 is `0.146.0`. This does not claim older
+versions can't work; the app only rejects untested versions to avoid
+depending on an unknown schema.
 
 ## Capability audit
 
-| Capability | Nguồn | Trạng thái v1 |
+| Capability | Source | v1 status |
 |---|---|---|
-| Account/auth/plan | `account/read` | Implement |
-| Quota windows/reset | `account/rateLimits/read` | Implement |
-| Live quota changes | `account/rateLimits/updated` | Implement |
-| Credits/spend control | Rate-limit snapshot | Parse và hiển thị khi có |
-| Token activity/daily buckets | `account/usage/read` | Parse; UI chi tiết ngoài v1 |
-| Earned reset redemption | consume method | Ngoài phạm vi; không gọi |
-| Direct backend HTTP | Không cần | Cấm |
+| Account/auth/plan | `account/read` | Implemented |
+| Quota windows/reset | `account/rateLimits/read` | Implemented |
+| Live quota changes | `account/rateLimits/updated` | Implemented |
+| Credits/spend control | Rate-limit snapshot | Parsed and shown when available |
+| Token activity/daily buckets | `account/usage/read` | Parsed; detailed UI is out of v1 scope |
+| Earned reset redemption | consume method | Out of scope; never called |
+| Direct backend HTTP | Not needed | Forbidden |

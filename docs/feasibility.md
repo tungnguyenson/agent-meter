@@ -1,81 +1,86 @@
-# Feasibility: Agent Meter đa-provider
+# Feasibility: Agent Meter multi-provider
 
-Ngày đánh giá: **2026-07-29**
+Assessment date: **2026-07-29**
 
 ## Verdict
 
-**PASS.** Agent Meter đa-provider đã hoàn thành.
+**PASS.** Agent Meter multi-provider is complete.
 
-Hai provider đều có đường lấy subscription quota mà không cần screen scraping:
+Both providers have a path to fetch subscription quota without screen scraping:
 
-- Claude Code: implementation hiện tại đã vận hành qua OAuth usage endpoint và
-  web fallback, nhưng cả hai là private contract.
-- Codex: OpenAI công bố account/rate-limit methods qua local
-  `codex app-server`; không cần đọc token hoặc gọi private HTTP endpoint.
+- Claude Code: the current implementation already operates via the OAuth usage
+  endpoint and a web fallback, but both are private contracts.
+- Codex: OpenAI publishes account/rate-limit methods via the local
+  `codex app-server`; no need to read tokens or call private HTTP endpoints.
 
-PASS không có nghĩa hai provider có độ ổn định bằng nhau. Kiến trúc bắt buộc
-cô lập adapter, schema và failure state theo provider.
+PASS does not mean both providers have equal stability. The architecture
+requires isolating adapter, schema, and failure state per provider.
 
 ## Capability matrix
 
 | Capability | Claude Code | Codex |
 |---|---|---|
-| Account/plan | Credential có field plan nhưng chưa nối UI | `account/read`, plan khi có |
+| Account/plan | Credential has a plan field but not wired to UI | `account/read`, plan when available |
 | Subscription quota % | `/api/oauth/usage` private | `account/rateLimits/read` official local protocol |
-| Window duration | Suy từ tên field đã biết | `windowDurationMins` từ protocol |
+| Window duration | Inferred from known field names | `windowDurationMins` from protocol |
 | Reset time | ISO-8601 `resets_at` | Unix seconds `resetsAt` |
-| Multiple/model limits | DTO có nhiều field Claude-specific | Collection theo limit ID, primary/secondary |
-| Push update | Không | Sparse `account/rateLimits/updated` |
-| Extra credit/spend | `extra_usage` | Credits, individual limit, spend control khi có |
-| Token activity | Model rời, chưa có source runtime | `account/usage/read` |
-| Credential ownership | Đọc keychain item của Claude Code | Codex app-server giữ toàn bộ auth |
-| Contract stability | Thấp | Trung bình; official repo nhưng CLI command experimental |
-| Offline cache | Đã có một snapshot | Cần cache keyed theo provider |
+| Multiple/model limits | DTO has several Claude-specific fields | Collection keyed by limit ID, primary/secondary |
+| Push update | No | Sparse `account/rateLimits/updated` |
+| Extra credit/spend | `extra_usage` | Credits, individual limit, spend control when available |
+| Token activity | Model exists, no runtime source yet | `account/usage/read` |
+| Credential ownership | Reads Claude Code's keychain item | Codex app-server owns all auth |
+| Contract stability | Low | Medium; official repo but CLI command is experimental |
+| Offline cache | One snapshot exists | Needs cache keyed by provider |
 
-## Bằng chứng và giới hạn
+## Evidence and limits
 
 ### Claude
 
-Code hiện tại chứng minh request, DTO, polling, cache, notification và UI chạy
-với quota fields. Anthropic xác nhận subscription usage được chia sẻ giữa Claude
-và Claude Code, có rolling/weekly limits và cung cấp `/usage`, nhưng không công
-bố endpoint hoặc schema mà app đang gọi.
+The current code proves that request, DTO, polling, cache, notification, and
+UI work with quota fields. Anthropic confirms subscription usage is shared
+between Claude and Claude Code, has rolling/weekly limits, and provides
+`/usage`, but does not publish the endpoint or schema the app actually calls.
 
 ### Codex
 
-OpenAI app-server README công bố:
+The OpenAI app-server README publishes:
 
 - stdio JSONL lifecycle;
 - `account/read`;
 - `account/rateLimits/read`;
 - sparse `account/rateLimits/updated`;
 - `account/usage/read`;
-- semantics của `usedPercent`, `windowDurationMins` và `resetsAt`.
+- semantics of `usedPercent`, `windowDurationMins`, and `resetsAt`.
 
-Local CLI `0.146.0` xác nhận app-server command và stdio transport có mặt. Một
-runtime account có thể không trả mọi optional field; đó là missing capability,
-không phải bằng chứng toàn provider không khả thi.
+Local CLI `0.146.0` confirms the app-server command and stdio transport are
+present. A given runtime account may not return every optional field; that is
+a missing capability, not evidence the whole provider is infeasible.
 
-## Điều kiện để giữ verdict PASS
+## Conditions to keep the PASS verdict
 
-Implementation phải dừng release nếu một trong các điều kiện sau không đạt:
+The implementation must halt release if any of the following conditions fail:
 
-1. Codex provider không đọc được ít nhất một rate-limit snapshot trên ChatGPT
-   account được hỗ trợ qua app-server.
-2. App cần đọc/copy credential Codex hoặc gọi private OpenAI HTTP endpoint.
-3. Việc thêm Codex làm Claude regression hoặc lỗi một provider chặn provider kia.
-4. Web session Claude vẫn nằm trong UserDefaults hay secret xuất hiện trong log.
-5. Schema không chịu được optional/unknown fields hoặc sparse notifications.
+1. The Codex provider cannot read at least one rate-limit snapshot on a
+   supported ChatGPT account via app-server.
+2. The app needs to read/copy Codex credentials or call a private OpenAI HTTP
+   endpoint.
+3. Adding Codex causes a Claude regression, or a failure in one provider
+   blocks the other.
+4. The Claude web session remains in UserDefaults, or a secret shows up in
+   logs.
+5. The schema cannot tolerate optional/unknown fields or sparse
+   notifications.
 
-Nếu upstream bỏ app-server rate-limit read API, Codex provider phải chuyển sang
-unsupported/degraded; không thay bằng dashboard scraping.
+If upstream removes the app-server rate-limit read API, the Codex provider
+must switch to unsupported/degraded; it must not be replaced with dashboard
+scraping.
 
-## Quyết định sản phẩm
+## Product decisions
 
-- v1 hỗ trợ macOS, Claude Code và Codex.
-- UI chọn một provider tại một thời điểm; không làm dashboard tổng hợp.
-- Core model dùng metric động, không dùng enum plan/window chung.
-- Provider-specific capability được hiển thị có điều kiện.
-- Web fallback Claude là Experimental và opt-in.
-- Không deploy, publish release, redeem credit hay thay đổi account trong scope.
-
+- v1 supports macOS, Claude Code, and Codex.
+- The UI selects one provider at a time; no aggregated dashboard.
+- The core model uses dynamic metrics, not a shared plan/window enum.
+- Provider-specific capabilities are shown conditionally.
+- The Claude web fallback is Experimental and opt-in.
+- No deploy, release publishing, credit redemption, or account changes are in
+  scope.

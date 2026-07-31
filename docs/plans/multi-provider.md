@@ -1,96 +1,109 @@
 # Implementation plan: multi-provider Agent Meter
 
-## Nguyên tắc thực hiện
+## Execution principles
 
-Thực hiện TDD theo từng phase: viết test fail, implementation tối thiểu để pass,
-refactor, rồi chạy lại suite. Không publish release trong plan này. Giữ Git
-history hiện tại khi đổi remote/rebrand và không đưa secret/PII vào fixture.
+Follow TDD phase by phase: write a failing test, minimal implementation to
+pass, refactor, then rerun the suite. No release publishing within this plan.
+Preserve existing Git history when changing remote/rebranding, and never put
+secrets/PII into fixtures.
 
-## Phase 1. Core contract và Claude adapter
+## Phase 1. Core contract and Claude adapter
 
-1. Viết test cho normalized models, unknown provider/metric values, percentage
-   và value/limit metric.
-2. Tạo provider protocol, metadata, snapshot/metric model và error taxonomy.
-3. Viết mapper tests từ `UsageData` hiện tại sang snapshot động, gồm missing
-   fields, fractional utilization, ISO dates và extra usage.
-4. Bọc Claude keychain/OAuth/web/cache hiện tại sau `ClaudeCodeProvider`, chưa đổi
-   UX.
-5. Chạy regression suite để chứng minh Claude behavior không đổi.
+1. Write tests for normalized models, unknown provider/metric values,
+   percentage, and value/limit metrics.
+2. Create the provider protocol, metadata, snapshot/metric model, and error
+   taxonomy.
+3. Write mapper tests from the current `UsageData` to the dynamic snapshot,
+   including missing fields, fractional utilization, ISO dates, and extra
+   usage.
+4. Wrap the existing Claude keychain/OAuth/web/cache behind
+   `ClaudeCodeProvider` without changing UX yet.
+5. Run the regression suite to prove Claude behavior is unchanged.
 
-Exit criteria: toàn bộ Claude fetch đi qua provider contract; app vẫn hiển thị
-đúng dữ liệu hiện tại.
+Exit criteria: all Claude fetches go through the provider contract; the app
+still displays the same data as before.
 
 ## Phase 2. Codex app-server client
 
-1. Tạo fake JSONL process harness và test handshake, request IDs, concurrent
-   responses, notification, malformed line, stderr, timeout và process exit.
-2. Implement binary resolver và version preflight, không qua shell.
-3. Implement long-lived process, `initialize`/`initialized`, pending-call table
-   và cancellation-safe shutdown.
-4. Viết DTO/mapper tests cho:
+1. Build a fake JSONL process harness and test handshake, request IDs,
+   concurrent responses, notifications, malformed lines, stderr, timeout, and
+   process exit.
+2. Implement the binary resolver and version preflight without going through
+   a shell.
+3. Implement the long-lived process, `initialize`/`initialized`, a
+   pending-call table, and cancellation-safe shutdown.
+4. Write DTO/mapper tests for:
    - account/auth/plan;
-   - single và multi-limit collections;
+   - single and multi-limit collections;
    - primary/secondary windows;
    - Unix-second reset;
-   - credits, individual limit và spend control;
+   - credits, individual limit, and spend control;
    - missing/unknown fields.
-5. Implement read calls; `account/usage/read` là best-effort.
-6. Test sparse update merge: absent/null metadata không xóa snapshot; ambiguous
-   update kích hoạt refetch.
+5. Implement the read calls; `account/usage/read` is best-effort.
+6. Test sparse update merging: absent/null metadata does not clear the
+   snapshot; ambiguous updates trigger a refetch.
 7. Implement bounded exponential restart backoff.
 
-Exit criteria: fixture integration test trả Codex snapshot; live smoke trên
-ChatGPT-authenticated CLI `>=0.146.0` trả ít nhất một quota window. Nếu live smoke
-không đạt, dừng Codex rollout và ghi exact blocker; không scrape dashboard.
+Exit criteria: fixture integration tests return a Codex snapshot; a live smoke
+test on a ChatGPT-authenticated CLI `>=0.146.0` returns at least one quota
+window. If the live smoke test fails, halt the Codex rollout and record the
+exact blocker; do not fall back to dashboard scraping.
 
 ## Phase 3. Multi-provider coordinator
 
-1. Viết tests cho refresh song song, partial success, provider-isolated cache,
-   stale state, auth gate, `429` cooldown và subprocess backoff.
-2. Thay singleton Claude usage state bằng coordinator keyed theo provider.
-3. Cache v2 snapshot/cooldown theo provider; decode failure của một entry không
-   làm mất entry khác.
-4. Namespace notification state bằng provider + metric + threshold.
-5. Forecast chỉ áp dụng cho metric đủ dữ liệu.
+1. Write tests for parallel refresh, partial success, provider-isolated
+   cache, stale state, auth gate, `429` cooldown, and subprocess backoff.
+2. Replace the singleton Claude usage state with a coordinator keyed by
+   provider.
+3. Cache v2 snapshot/cooldown per provider; a decode failure in one entry
+   must not lose other entries.
+4. Namespace notification state by provider + metric + threshold.
+5. Forecast only applies to metrics with sufficient data.
 
-Exit criteria: một provider liên tục lỗi nhưng provider còn lại vẫn refresh,
-notify và render từ state riêng.
+Exit criteria: one provider fails continuously while the other keeps
+refreshing, notifying, and rendering from its own state.
 
-## Phase 4. Settings migration và security hardening
+## Phase 4. Settings migration and security hardening
 
-1. Viết migration tests từ settings/cache v1, gồm rerun idempotency và partial
-   Keychain failure.
-2. Implement settings v2: enabled/selected providers, visibility, tối đa hai pin.
-3. Migrate global Claude preferences và legacy cache.
-4. Chuyển Claude `sessionKey` sang Agent Meter-owned Keychain; chỉ xóa legacy
-   value sau write thành công.
-5. Redact diagnostic; loại raw credential/PII response logging.
-6. Security tests cho executable path/argv, log redaction và cache/settings
-   serialization không chứa secret.
+1. Write migration tests from settings/cache v1, including rerun idempotency
+   and partial Keychain failure.
+2. Implement settings v2: enabled/selected providers, visibility, max two
+   pins.
+3. Migrate global Claude preferences and the legacy cache.
+4. Move Claude's `sessionKey` to an Agent Meter-owned Keychain; only remove
+   the legacy value after a successful write.
+5. Redact diagnostics; remove raw credential/PII response logging.
+6. Security tests for executable path/argv, log redaction, and
+   cache/settings serialization containing no secrets.
 
-Exit criteria: tìm kiếm UserDefaults/cache/log fixture không thấy token, cookie,
-email hoặc account ID; migration không làm mất secret nếu Keychain write fail.
+Exit criteria: searching UserDefaults/cache/log fixtures finds no token,
+cookie, email, or account ID; migration does not lose a secret if the
+Keychain write fails.
 
-## Phase 5. UX và rebrand
+## Phase 5. UX and rebrand
 
-1. Viết view-model tests cho picker, dynamic cards, unsupported/auth/error/stale
-   states và pin fallback.
-2. Rework popover thành Agent Meter với provider picker và health/last updated.
-3. Rework menu bar cho selected provider và tối đa hai metric động; giữ Icon,
-   Compact, Detailed và fixed/countdown style.
-4. Chia Settings thành global và provider sections; web fallback Claude mang
-   nhãn Experimental.
-5. Rebrand target/scheme/app/cache/defaults/DMG/docs sang Agent Meter, bundle ID
-   `com.agentmeter.app`; giữ compatibility migration với legacy keys/path.
-6. Giữ Git history, đổi `origin` sang
-   `git@github.com:tungnguyenson/agent-meter.git` sau khi code/tests ổn định.
+1. Write view-model tests for the picker, dynamic cards,
+   unsupported/auth/error/stale states, and pin fallback.
+2. Rework the popover into Agent Meter with a provider picker and
+   health/last-updated indicators.
+3. Rework the menu bar for the selected provider and up to two dynamic pinned
+   metrics; keep Icon, Compact, and Detailed, and fixed/countdown style.
+4. Split Settings into global and provider sections; the Claude web fallback
+   is labeled Experimental.
+5. Rebrand target/scheme/app/cache/defaults/DMG/docs to Agent Meter, bundle
+   ID `com.agentmeter.app`; keep compatibility migration for legacy
+   keys/paths.
+6. Preserve Git history; change `origin` to
+   `git@github.com:tungnguyenson/agent-meter.git` once code/tests are
+   stable.
 
-Exit criteria: critical UI flow dùng được với Claude và Codex cùng enabled;
-đã loại bỏ ClaudeMeter branding, giữ lại chỉ migration/legacy compatibility code.
+Exit criteria: the critical UI flow works with both Claude and Codex enabled;
+ClaudeMeter branding is removed, keeping only migration/legacy compatibility
+code.
 
-## Verification và review
+## Verification and review
 
-Chạy tối thiểu:
+Run at minimum:
 
 ```bash
 xcodebuild test -project AgentMeter.xcodeproj \
@@ -98,24 +111,27 @@ xcodebuild test -project AgentMeter.xcodeproj \
   -destination 'platform=macOS'
 ```
 
-Nếu rebrand chưa hoàn tất ở phase đang chạy, dùng project/scheme cũ nhưng ghi rõ
-boundary. Sau đó:
+If the rebrand is not yet complete in the phase being run, use the old
+project/scheme but note the boundary clearly. Then:
 
-1. Báo coverage và bổ sung test để đạt tối thiểu 80%.
-2. Chạy general code review và Swift-specific review.
-3. Bắt buộc security review vì có credential, filesystem, subprocess và external
-   API boundary.
-4. Sửa mọi CRITICAL/HIGH; sửa MEDIUM khi không làm rộng scope.
-5. Kiểm tra không có hardcoded secret, debug print/raw response, deep nesting,
-   function >50 dòng hoặc file >800 dòng mới.
-6. Live smoke cả Claude và Codex; static test không thay thế runtime acceptance.
+1. Report coverage and add tests to reach at least 80%.
+2. Run a general code review and a Swift-specific review.
+3. A security review is mandatory because credential, filesystem, subprocess,
+   and external API boundaries are involved.
+4. Fix all CRITICAL/HIGH issues; fix MEDIUM issues when it doesn't expand
+   scope.
+5. Check for no hardcoded secrets, no debug print/raw response, no deep
+   nesting, no function >50 lines, and no new file >800 lines.
+6. Live smoke test both Claude and Codex; static tests do not replace runtime
+   acceptance.
 
 ## Rollout boundary
 
-- Không deploy, notarize, tạo GitHub release hay redeem credit.
-- Chỉ tạo draft PR sau khi test, coverage và review đạt yêu cầu.
-- Codex provider có thể ship dưới feature flag nếu app-server compatibility cần
-  thêm soak time; Claude provider vẫn là default sau migration.
-- Nếu upstream contract fail, disable riêng provider và giữ cached snapshot với
-  trạng thái degraded; không đổi sang private endpoint khác ngoài spec.
-
+- No deploy, notarize, GitHub release creation, or credit redemption.
+- Only open a draft PR once tests, coverage, and review pass.
+- The Codex provider may ship under a feature flag if app-server
+  compatibility needs more soak time; the Claude provider remains the
+  default after migration.
+- If an upstream contract fails, disable that provider individually and keep
+  the cached snapshot in a degraded state; do not switch to another private
+  endpoint outside the spec.

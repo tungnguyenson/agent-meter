@@ -1,54 +1,56 @@
 # Claude Code provider
 
-Tài liệu này mô tả đúng implementation Agent Meter tại thời điểm
-2026-07-29. Đây không phải tài liệu về Anthropic API công khai: hai endpoint
-quota đang dùng là contract nội bộ, có thể thay đổi mà không báo trước.
+This document describes the exact Agent Meter implementation as of
+2026-07-29. This is not documentation of a public Anthropic API: the two
+quota endpoints in use are private contracts that can change without notice.
 
-## Phạm vi quota
+## Quota scope
 
-Claude tính usage limit trên nhiều bề mặt dùng chung một tài khoản, không riêng
-Claude Code. Anthropic xác nhận hoạt động trên Claude, Claude Code và các bề mặt
-khác cùng tính vào usage limit; quota phụ thuộc plan, model, độ dài và độ phức
-tạp của phiên làm việc. Claude Code cũng có lệnh `/usage` để xem trạng thái
-rate-limit của plan.
+Claude counts usage limits across multiple surfaces sharing the same
+account, not just Claude Code. Anthropic confirms that activity on Claude,
+Claude Code, and other surfaces all counts toward the same usage limit;
+quota depends on plan, model, and the length/complexity of the session.
+Claude Code also has a `/usage` command to view the plan's rate-limit status.
 
-Nguồn chính thức:
+Official sources:
 
 - [Claude usage and length limits](https://support.claude.com/en/articles/11647753-how-do-usage-and-length-limits-work)
 - [Use Claude Code with a Pro or Max plan](https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-or-max-plan)
 - [Claude Code cheatsheet](https://support.claude.com/en/articles/14553413-claude-code-cheatsheet)
 
-Vì quota được dùng chung, nhãn provider trong Agent Meter là **Claude Code**
-nhưng số liệu thực chất là quota của tài khoản Claude.
+Because the quota is shared, the provider label in Agent Meter is **Claude
+Code**, but the numbers are really the Claude account's quota.
 
-## Luồng đang được dùng
+## Current flow
 
-### 1. Đọc OAuth credential của Claude Code
+### 1. Read Claude Code's OAuth credential
 
-Agent Meter không thực hiện login. Trên macOS, nó chạy:
+Agent Meter never performs login. On macOS it runs:
 
 ```text
 /usr/bin/security find-generic-password -s "Claude Code-credentials" -w
 ```
 
-Payload JSON được decode theo ba shape, theo thứ tự:
+The JSON payload is decoded against three shapes, in order:
 
 1. `{ "claudeAiOauth": { ... } }`;
-2. OAuth object không có wrapper;
-3. `ClaudeCredentials` trực tiếp.
+2. an OAuth object with no wrapper;
+3. `ClaudeCredentials` directly.
 
-Các trường được giữ lại gồm access token, refresh token, thời điểm hết hạn và
-subscription type. `expiresAt` từ payload CLI được hiểu là Unix milliseconds.
-App chỉ kiểm tra access token còn hạn; app **không** dùng refresh token và không
-tự refresh credential. Claude Code vẫn là chủ sở hữu login lifecycle.
+Fields kept include access token, refresh token, expiry time, and
+subscription type. `expiresAt` from the CLI payload is interpreted as Unix
+milliseconds. The app only checks whether the access token is still valid;
+it **never** uses the refresh token and never refreshes credentials itself.
+Claude Code remains the owner of the login lifecycle.
 
-Anthropic công khai rằng Claude Code hỗ trợ đăng nhập bằng Claude subscription
-và lưu credential an toàn, nhưng không công bố keychain service name hay payload
-schema nói trên. Xem [Claude Code getting started](https://code.claude.com/docs/en/getting-started).
+Anthropic publicly states that Claude Code supports logging in with a Claude
+subscription and stores credentials securely, but does not publish the
+keychain service name or the payload schema above. See
+[Claude Code getting started](https://code.claude.com/docs/en/getting-started).
 
-### 2. Gọi OAuth usage endpoint
+### 2. Call the OAuth usage endpoint
 
-Request hiện tại:
+Current request:
 
 ```http
 GET https://api.anthropic.com/api/oauth/usage
@@ -59,104 +61,107 @@ Accept: application/json
 Content-Type: application/json
 ```
 
-`ClaudeCodeVersionResolver` tìm version mà không phụ thuộc `PATH`: symlink native,
-thư mục version native, kết quả auto-update, rồi các binary path phổ biến. Nếu
-không tìm thấy, nó dùng version fallback đã pin.
+`ClaudeCodeVersionResolver` finds the version without depending on `PATH`:
+native symlink, native version directory, auto-update result, then common
+binary paths. If none is found, it falls back to a pinned version.
 
-Response được decode với ISO-8601 có hoặc không có fractional seconds. Giá trị
-`utilization` trong khoảng `(0, 1)` được chuyển sang phần trăm; các giá trị khác
-được giữ nguyên. HTTP behavior:
+The response is decoded with ISO-8601 timestamps, with or without fractional
+seconds. `utilization` values in the `(0, 1)` range are converted to a
+percentage; other values are kept as-is. HTTP behavior:
 
-| Status | Xử lý |
+| Status | Handling |
 |---|---|
 | `200` | Decode snapshot |
 | `401` | Unauthorized |
-| `429` | Rate-limited; đọc `Retry-After` từ header, JSON hoặc text |
-| `5xx` và status khác | Server error |
+| `429` | Rate-limited; read `Retry-After` from header, JSON, or text |
+| `5xx` and other statuses | Server error |
 
-### 3. Web fallback tùy chọn
+### 3. Optional web fallback
 
-Nếu OAuth request ném `APIError`, app thử fallback khi người dùng đã nhập đủ
-organization ID và `sessionKey`:
+If the OAuth request throws an `APIError`, the app tries a fallback when the
+user has entered both an organization ID and `sessionKey`:
 
 ```http
 GET https://claude.ai/api/organizations/<organization-id>/usage
 Cookie: sessionKey=[REDACTED_SECRET]
 ```
 
-Nếu response có `Set-Cookie` mới, app lấy `sessionKey` mới và ghi lại settings.
-`401` và `403` đều được coi là unauthorized. Đây cũng là private web contract,
-không phải API được Anthropic cam kết cho third-party client.
+If the response includes a new `Set-Cookie`, the app picks up the new
+`sessionKey` and writes it back to settings. Both `401` and `403` are
+treated as unauthorized. This is also a private web contract, not an API
+Anthropic commits to for third-party clients.
 
 ## Capability audit
 
-Các nhãn dưới đây quan trọng khi tổng quát hóa: field tồn tại trong DTO không có
-nghĩa là người dùng đã thấy tính năng đó.
+The labels below matter when generalizing: a field existing in the DTO does
+not mean the user has ever seen that feature.
 
-### Đang được implement và dùng
+### Implemented and in use
 
 | Capability | Runtime behavior |
 |---|---|
-| `five_hour` | Hiển thị card; menu bar; forecast; polling; notification/reset |
-| `seven_day` | Hiển thị card; detailed menu bar; forecast; polling; notification/reset |
-| `seven_day_sonnet` | Hiển thị khi bật setting; polling; notification/reset |
-| `seven_day_omelette` | Map thành Claude Design; hiển thị khi bật setting; notification/reset |
-| `extra_usage` | Hiển thị credit usage khi enabled và setting được bật |
-| OAuth error/cooldown | Cache fallback, auth gate và persisted `429` cooldown |
-| Offline cache | Một snapshot Claude, TTL 24 giờ |
-| Web fallback | Opt-in; chạy sau mọi `APIError` của OAuth path |
+| `five_hour` | Shown as a card; menu bar; forecast; polling; notification/reset |
+| `seven_day` | Shown as a card; detailed menu bar; forecast; polling; notification/reset |
+| `seven_day_sonnet` | Shown when the setting is enabled; polling; notification/reset |
+| `seven_day_omelette` | Mapped to Claude Design; shown when the setting is enabled; notification/reset |
+| `extra_usage` | Shows credit usage when enabled and the setting is on |
+| OAuth error/cooldown | Cache fallback, auth gate, and persisted `429` cooldown |
+| Offline cache | One Claude snapshot, 24-hour TTL |
+| Web fallback | Opt-in; runs after any OAuth-path `APIError` |
 
-`seven_day_opus` không có card riêng nhưng được dùng trong adaptive polling,
-notification và reset detection. Vì vậy nó là **được xử lý nhưng chỉ hiển thị
-gián tiếp**, không phải hoàn toàn unused.
+`seven_day_opus` has no dedicated card but is used in adaptive polling,
+notification, and reset detection. It is therefore **handled but only shown
+indirectly**, not fully unused.
 
-### Đã parse nhưng chưa dùng vào sản phẩm
+### Parsed but not wired into the product
 
-| Field/model | Hiện trạng |
+| Field/model | Current status |
 |---|---|
-| `seven_day_oauth_apps` | Decode và cache; không card, menu bar, polling hay notification |
-| `seven_day_cowork` | Decode và cache; không card, menu bar, polling hay notification |
-| `TokenUsage` | Có model và component mẫu, không được nối vào fetch/runtime |
-| `subscriptionType` | Decode từ credential nhưng không nối vào app state hoặc badge |
-| `SubscriptionBadgeView` | Có component preview, không xuất hiện trong popover thực |
+| `seven_day_oauth_apps` | Decoded and cached; no card, menu bar, polling, or notification |
+| `seven_day_cowork` | Decoded and cached; no card, menu bar, polling, or notification |
+| `TokenUsage` | Has a model and a sample component, not wired into fetch/runtime |
+| `subscriptionType` | Decoded from credentials but not wired into app state or badge |
+| `SubscriptionBadgeView` | Has a preview component, does not appear in the real popover |
 
-### Chỉ được tuyên bố hoặc chưa được chứng minh
+### Claimed only, or unproven
 
-- README nói “plan detection” cho Free, Pro, Max, Max 5x, Team, Enterprise.
-  Runtime hiện tại không render plan và unknown plan còn fallback thành Pro.
-- README nói “token consumption in real-time”. Provider hiện tại chỉ fetch
-  utilization quota; không thu thập token ledger theo thời gian thực.
-- Không có bằng chứng public contract cho `/api/oauth/usage`,
-  `/api/organizations/<id>/usage`, keychain payload hay beta header. Những phần
-  này chỉ được chứng minh bằng implementation và test của repo.
+- The README says "plan detection" for Free, Pro, Max, Max 5x, Team,
+  Enterprise. The current runtime does not render a plan, and an unknown
+  plan still falls back to Pro.
+- The README says "token consumption in real-time". The current provider
+  only fetches utilization quota; it does not collect a real-time token
+  ledger.
+- There is no public contract evidence for `/api/oauth/usage`,
+  `/api/organizations/<id>/usage`, the keychain payload, or the beta header.
+  These are proven only by this repo's implementation and tests.
 
-## Stability và security
+## Stability and security
 
-| Rủi ro | Mức | Quyết định |
+| Risk | Level | Decision |
 |---|---|---|
-| Private OAuth/web schema thay đổi | Cao | DTO tolerant, provider-local mapper, test fixtures, lỗi không làm hỏng provider khác |
-| Đọc keychain item do app khác sở hữu | Cao | Chỉ đọc; không ghi/xóa/refresh token; không log payload |
-| Web session trong UserDefaults | Critical cần sửa | Migrate sang Keychain do Agent Meter sở hữu, rồi xóa bản settings |
-| Raw DEBUG response có thể chứa dữ liệu tài khoản | Cao | Redact hoặc loại bỏ raw body logging trước release đa-provider |
-| Hardcoded CLI fallback version | Trung bình | Giữ resolver động; báo lỗi rõ nếu endpoint từ chối version |
+| Private OAuth/web schema changes | High | Tolerant DTO, provider-local mapper, test fixtures, a failure doesn't break other providers |
+| Reading a keychain item owned by another app | High | Read-only; never write/delete/refresh the token; never log the payload |
+| Web session stored in UserDefaults | Critical, needs fixing | Migrate to an Agent Meter-owned Keychain, then delete the settings copy |
+| Raw DEBUG response may contain account data | High | Redact or remove raw body logging before the multi-provider release |
+| Hardcoded CLI fallback version | Medium | Keep the resolver dynamic; report a clear error if the endpoint rejects the version |
 
-Web fallback phải được ghi nhãn **Experimental**, mặc định tắt. App không được
-hiển thị access token, refresh token, cookie, email hay organization/account ID
-trong log, cache, fixture hoặc tài liệu.
+The web fallback must be labeled **Experimental** and off by default. The
+app must never show an access token, refresh token, cookie, email, or
+organization/account ID in logs, cache, fixtures, or documentation.
 
-## Mapping sang model chung
+## Mapping to the shared model
 
-Mỗi window có dữ liệu được map thành một metric động:
+Each window's data is mapped to a dynamic metric:
 
 ```text
 providerID    = "claude-code"
-metric.id     = raw field name ổn định theo provider
+metric.id     = stable raw field name per provider
 usedPercent   = normalized utilization
 resetsAt      = resets_at
-windowDuration = known duration khi semantics đã xác định
+windowDuration = known duration once semantics are confirmed
 ```
 
-`extra_usage` map thành metric value/limit, không ép thành rate-limit window nếu
-thiếu utilization. Unknown field không được làm fail toàn snapshot; provider
-có thể bổ sung mapping khi semantics đã được xác nhận.
-
+`extra_usage` maps to a value/limit metric and is not forced into a
+rate-limit window when utilization is missing. Unknown fields must not fail
+the whole snapshot; the provider can add mappings later once semantics are
+confirmed.

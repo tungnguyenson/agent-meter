@@ -1,34 +1,37 @@
 # Cursor provider
 
-Tài liệu này ghi lại kết quả điều tra thực địa ngày 2026-07-30 trên máy dev
-(`nstung@gmail.com`, Cursor Pro, `cursor-agent` CLI đã login). Đây **không phải**
-tài liệu về API công khai của Cursor: mọi endpoint mô tả dưới đây là contract
-nội bộ mà web dashboard `cursor.com` dùng, được suy ra bằng cách probe trực
-tiếp, không có trong doc chính thức. Chưa có dòng code nào implement provider
-này; tài liệu này là input cho việc đó.
+This document records field investigation results from 2026-07-30 on a dev
+machine (`nstung@gmail.com`, Cursor Pro, `cursor-agent` CLI logged in). This
+is **not** documentation of Cursor's public API: every endpoint described
+below is a private contract used by the `cursor.com` web dashboard, inferred
+by probing directly, and not found in official docs. No code implements this
+provider yet; this document is input for that work.
 
-## Kết luận khả thi
+## Feasibility conclusion
 
-Lấy được usage cá nhân, đầy đủ và khớp 1:1 với UI trang Spending
-(`cursor.com/dashboard` → Spending). Nhưng đây là **API nội bộ không có hợp
-đồng ổn định**, rủi ro tương đương hoặc cao hơn phần Claude Code web fallback.
+Personal usage data can be fetched, complete and matching the Spending page
+UI 1:1 (`cursor.com/dashboard` → Spending). But this is an **internal API
+with no stable contract**, a risk equal to or higher than the Claude Code web
+fallback.
 
-Theo [cursor.com/docs/api](https://cursor.com/docs/api), API usage/spend chính
-thức (Admin API, Analytics API, cụ thể là `api.cursor.com/teams/*` và
-`api.cursor.com/analytics`) chỉ dành cho **Enterprise/Team**, auth bằng Basic
-Auth với API key riêng. Tài khoản cá nhân **không có API usage chính thức**.
-Cloud Agents API mở cho mọi plan nhưng không expose usage/spend.
+Per [cursor.com/docs/api](https://cursor.com/docs/api), the official
+usage/spend API (Admin API, Analytics API, specifically `api.cursor.com/teams/*`
+and `api.cursor.com/analytics`) is only available for **Enterprise/Team**,
+authenticated with Basic Auth using a dedicated API key. Personal accounts
+**have no official usage API**. The Cloud Agents API is open to every plan
+but does not expose usage/spend.
 
-## Credential
+## Credentials
 
-Cursor Desktop/CLI lưu access token + refresh token trong macOS Keychain:
+Cursor Desktop/CLI stores an access token + refresh token in the macOS
+Keychain:
 
 ```text
 security find-generic-password -s cursor-access-token -a cursor-user -w
 security find-generic-password -s cursor-refresh-token -a cursor-user -w
 ```
 
-Token là JWT do WorkOS cấp:
+The token is a JWT issued by WorkOS:
 
 ```json
 {
@@ -42,14 +45,15 @@ Token là JWT do WorkOS cấp:
 }
 ```
 
-Vòng đời quan sát được: cấp lại mỗi ~60 ngày (test case: issued → expires =
-đúng 60.0 ngày). Có refresh token đi kèm nên refresh được, nhưng chưa verify
-luồng refresh cụ thể.
+Observed lifecycle: reissued roughly every ~60 days (test case: issued →
+expires = exactly 60.0 days). A refresh token is included so refreshing is
+possible, but the specific refresh flow hasn't been verified yet.
 
-**Bẫy quan trọng**: userId đúng để gọi API là claim `sub` của JWT
-(`google-oauth2|user_...`), **không phải** số nguyên `authInfo.userId` lưu
-trong `~/.cursor/cli-config.json`. Dùng nhầm số nguyên đó, `/api/usage` vẫn trả
-`200` nhưng toàn field `0`: fail silent, không có lỗi rõ để bắt.
+**Important trap**: the correct userId for API calls is the JWT's `sub`
+claim (`google-oauth2|user_...`), **not** the integer `authInfo.userId`
+stored in `~/.cursor/cli-config.json`. Using that integer by mistake, the
+`/api/usage` call still returns `200` but with every field `0`: a silent
+failure with no clear error to catch.
 
 ## Auth header
 
@@ -57,22 +61,22 @@ trong `~/.cursor/cli-config.json`. Dùng nhầm số nguyên đó, `/api/usage` 
 Cookie: WorkosCursorSessionToken=<sub URL-encoded>::<jwt>
 ```
 
-Bearer token (`Authorization: Bearer <jwt>`) **không hoạt động** với
-`cursor.com` (trả `401 not_authenticated`), nhưng hoạt động với
-`api2.cursor.sh` (backend legacy mà desktop app/CLI dùng).
+A Bearer token (`Authorization: Bearer <jwt>`) **does not work** against
+`cursor.com` (returns `401 not_authenticated`), but does work against
+`api2.cursor.sh` (the legacy backend used by the desktop app/CLI).
 
-Mọi request `POST` tới `cursor.com/api/dashboard/*` bắt buộc thêm:
+Every `POST` request to `cursor.com/api/dashboard/*` requires:
 
 ```http
 Origin: https://cursor.com
 ```
 
-Thiếu header này, response là `403 {"error":"Invalid origin for
-state-changing request"}` dù cookie hợp lệ.
+Without this header, the response is `403 {"error":"Invalid origin for
+state-changing request"}` even with a valid cookie.
 
-## Endpoint đã verify
+## Verified endpoints
 
-### `GET /api/usage-summary` (endpoint chính, dùng cho menu bar)
+### `GET /api/usage-summary` (main endpoint, used for the menu bar)
 
 ```json
 {
@@ -97,37 +101,40 @@ state-changing request"}` dù cookie hợp lệ.
 }
 ```
 
-Đã đối chiếu trực tiếp với UI trang Spending, khớp từng số:
+Cross-checked directly against the Spending page UI, matching every number:
 
-| UI Spending | Field | Giá trị test |
+| UI Spending | Field | Test value |
 |---|---|---|
 | "Cursor Models, 100% used" | `plan.autoPercentUsed` | `100` |
-| "Other Models, 89% used" | `plan.apiPercentUsed` | `88.89` → làm tròn 89 |
+| "Other Models, 89% used" | `plan.apiPercentUsed` | `88.89` → rounds to 89 |
 | "plan includes at least $20 of API usage" | `plan.breakdown.included` | `2000` |
 | "On-Demand: $0.00 / $5" | `onDemand.used` / `onDemand.limit` | `0` / `500` |
 
-**Đơn vị: cents.** `500` = $5.00, `2000` = $20.00. Field `used`/`limit`/`remaining`
-ở top level `plan` là tổng số tiêu từ quota included, **không phải** hạn mức,
-tên field gây hiểu lầm.
+**Unit: cents.** `500` = $5.00, `2000` = $20.00. The `used`/`limit`/`remaining`
+fields at the top level of `plan` are the total amount spent from the
+included quota, **not** a limit — the field names are misleading.
 
-`breakdown` là phân rã số **đã tiêu** trong chu kỳ, không phải limit:
+`breakdown` is a breakdown of what's already **been spent** in the cycle,
+not a limit:
 
 ```text
-breakdown.included = tiêu từ quota included trong gói (2000 = $20, đúng bằng giá Pro)
-breakdown.bonus     = tiêu từ bonus/credit ngoài included
+breakdown.included = spent from the plan's included quota (2000 = $20, matches the Pro price exactly)
+breakdown.bonus     = spent from bonus/credit outside the included amount
 breakdown.total     = included + bonus
 ```
 
-Verify chéo: gọi `get-aggregated-usage-events` đúng cửa sổ
-`billingCycleStart → now` cho `totalCostCents = 34046.91`, khớp
-`breakdown.total = 34047` sai lệch 0.09 cent do làm tròn. Suy ra hạn mức tổng
-ẩn = `34047 / 0.98687 ≈ 34500` cents = $345, nhưng con số này **không có sẵn
-trong payload**, phải tự suy. Đừng hard-code, chỉ hiển thị percent có sẵn.
+Cross-verified: calling `get-aggregated-usage-events` for the exact window
+`billingCycleStart → now` gives `totalCostCents = 34046.91`, matching
+`breakdown.total = 34047` with a 0.09-cent difference from rounding. This
+implies a hidden total limit of `34047 / 0.98687 ≈ 34500` cents = $345, but
+this number **is not present in the payload** — it has to be inferred.
+Don't hard-code it; only show the percent that's actually available.
 
-**`autoModelSelectedDisplayMessage`/`namedModelSelectedDisplayMessage`** (chuỗi
-"You've used 99% of..."): đây là copy hiển thị trong editor khi chọn model,
-**không khớp chính xác với số trên trang Spending** (99% vs progress bar 100%
-do làm tròn khác nhau). Không dùng chuỗi này để render UI, chỉ dùng số.
+**`autoModelSelectedDisplayMessage`/`namedModelSelectedDisplayMessage`**
+(strings like "You've used 99% of..."): this is display copy shown in the
+editor's model picker, and it **does not exactly match the number on the
+Spending page** (99% vs. a progress bar showing 100% due to different
+rounding). Don't use this string to render UI — use the numbers only.
 
 ### `POST /api/dashboard/get-hard-limit`
 
@@ -135,9 +142,10 @@ do làm tròn khác nhau). Không dùng chuỗi này để render UI, chỉ dùn
 { "hardLimit": 5 }
 ```
 
-**Đơn vị: dollars**, không phải cents, khác đơn vị với `usage-summary`. Khớp
-"Monthly Limit: Fixed, 5" trên UI On-Demand. Bẫy: nếu cộng thẳng field này với
-số cents ở endpoint khác sẽ sai lệch 100 lần.
+**Unit: dollars**, not cents — a different unit than `usage-summary`.
+Matches "Monthly Limit: Fixed, 5" on the On-Demand UI. Trap: adding this
+field directly to a cents value from another endpoint will be off by a
+factor of 100.
 
 ### `GET /api/auth/me`
 
@@ -149,11 +157,12 @@ số cents ở endpoint khác sẽ sai lệch 100 lần.
 }
 ```
 
-Dùng để lấy display info; `id` ở đây chính là số `authInfo.userId` trong
-`cli-config.json`, xác nhận số đó **không phải** giá trị cần cho query param
-`?user=` của `/api/usage` (endpoint cũ, xem phần "Không dùng" bên dưới).
+Used to get display info; the `id` here is exactly the integer
+`authInfo.userId` in `cli-config.json`, confirming that number is **not**
+the value needed for the `?user=` query param on `/api/usage` (an old
+endpoint, see "Not used" below).
 
-### `GET /api/auth/stripe` (hoặc `api2.cursor.sh/auth/full_stripe_profile` với Bearer)
+### `GET /api/auth/stripe` (or `api2.cursor.sh/auth/full_stripe_profile` with Bearer)
 
 ```json
 {
@@ -166,12 +175,12 @@ Dùng để lấy display info; `id` ở đây chính là số `authInfo.userId`
 }
 ```
 
-Dùng cho plan label / badge, tương tự `subscriptionType` ở Claude Code.
+Used for plan label/badge, similar to `subscriptionType` in Claude Code.
 
-### `POST /api/dashboard/get-aggregated-usage-events` (optional, panel chi tiết)
+### `POST /api/dashboard/get-aggregated-usage-events` (optional, detail panel)
 
-Params: `{"teamId":0,"startDate":"<ms>","endDate":"<ms>"}` (epoch millisecond
-dạng **string**, không phải number).
+Params: `{"teamId":0,"startDate":"<ms>","endDate":"<ms>"}` (epoch
+milliseconds as a **string**, not a number).
 
 ```json
 {
@@ -192,76 +201,83 @@ dạng **string**, không phải number).
 }
 ```
 
-Token count field là **string**, không phải number, decode phải tolerant.
-`totalCents` per-model là `Double`. Hữu ích cho breakdown theo model nếu sau
-này làm panel chi tiết; không cần cho menu bar summary.
+Token count fields are **strings**, not numbers — decoding must be
+tolerant. Per-model `totalCents` is a `Double`. Useful for a per-model
+breakdown if a detail panel is built later; not needed for the menu bar
+summary.
 
-### `POST /api/dashboard/get-filtered-usage-events` (optional, log từng request)
+### `POST /api/dashboard/get-filtered-usage-events` (optional, per-request log)
 
-Params: `{"teamId":0,"page":1,"pageSize":N}`. Trả `totalUsageEventsCount` và
-mảng event có `timestamp` (ms string), `model`, `tokenUsage`, `chargedCents`,
-`conversationId`. Không cần cho v1.
+Params: `{"teamId":0,"page":1,"pageSize":N}`. Returns
+`totalUsageEventsCount` and an array of events with `timestamp` (ms
+string), `model`, `tokenUsage`, `chargedCents`, `conversationId`. Not
+needed for v1.
 
-## Endpoint không dùng
+## Endpoints not used
 
-`GET /api/usage?user=<id>`: endpoint premium-request đời cũ (pre token-based
-pricing), luôn trả `gpt-4: {numRequests: 0, numTokens: 0}` bất kể userId đúng
-hay sai vì model tính phí đã đổi sang token-based. Đừng dùng.
+`GET /api/usage?user=<id>`: legacy premium-request endpoint (pre
+token-based pricing), always returns `gpt-4: {numRequests: 0, numTokens: 0}`
+regardless of a correct or incorrect userId, since pricing has moved to
+token-based. Don't use it.
 
-`POST /api/dashboard/get-user-hard-limit`, `get-current-usage-limit`: trả về
-HTML của Next.js app shell thay vì JSON, tức route không tồn tại dưới dạng API
-hoặc yêu cầu tham số khác chưa xác định. Không dùng cho tới khi verify lại.
+`POST /api/dashboard/get-user-hard-limit`, `get-current-usage-limit`: return
+the Next.js app-shell HTML instead of JSON, meaning the route either
+doesn't exist as an API or requires different, unidentified parameters. Do
+not use until re-verified.
 
-`api.cursor.com/teams/*`: 404/405 khi gọi không có Basic Auth team API key,
-đúng như doc, không áp dụng cho tài khoản cá nhân.
+`api.cursor.com/teams/*`: 404/405 when called without a Basic Auth team API
+key, matching the docs — not applicable to personal accounts.
 
-## Dữ liệu local không đủ dùng
+## Local data that isn't sufficient
 
-`~/.cursor/ai-tracking/ai-code-tracking.db` (SQLite) chỉ chứa AI
-code-authorship theo commit (`scored_commits`: lines added/deleted, % AI per
-commit), không có token/request/quota. `~/.cursor/cli-config.json` có sẵn
-`authInfo.email`, `authInfo.displayName`, `serverConfigCache.backendUrl`
-(`https://api2.cursor.sh`), dùng được để hiển thị account label mà không cần
-gọi network, nhưng **không dùng `authInfo.userId`** (xem bẫy JWT `sub` ở trên).
-Không có file local nào thay thế được việc gọi API cho usage.
+`~/.cursor/ai-tracking/ai-code-tracking.db` (SQLite) only contains
+AI-code-authorship data per commit (`scored_commits`: lines added/deleted,
+% AI per commit), with no token/request/quota data.
+`~/.cursor/cli-config.json` has `authInfo.email`, `authInfo.displayName`,
+`serverConfigCache.backendUrl` (`https://api2.cursor.sh`), which can be used
+to show the account label without a network call, but **do not use
+`authInfo.userId`** (see the JWT `sub` trap above). No local file can
+replace calling the API for usage data.
 
-## Stability và rủi ro
+## Stability and risk
 
-| Rủi ro | Mức | Cách xử lý đề xuất |
+| Risk | Level | Suggested handling |
 |---|---|---|
-| Không có public contract, endpoint có thể đổi bất kỳ lúc nào | Cao | DTO tolerant decode, provider-local mapper, lỗi không làm hỏng provider khác, theo đúng pattern `ClaudeUsageMapper`/`CodexUsageMapper` hiện tại |
-| Hai đơn vị tiền khác nhau giữa `usage-summary` (cents) và `get-hard-limit` (dollars) | Cao nếu implement sai | Đặt tên field rõ đơn vị ngay từ mapper, không truyền float thô qua boundary mà không gắn nhãn |
-| `userId` sai (dùng `authInfo.userId` thay vì JWT `sub`) fail silent, trả `200` với data toàn 0 | Cao | Luôn tự decode `sub` từ JWT tại provider, không đọc `cli-config.json` cho việc này |
-| JWT hết hạn ~60 ngày, chưa verify refresh flow | Trung bình | v1 coi hết hạn là `authenticationRequired`, không tự refresh cho tới khi luồng refresh được verify riêng |
-| Token count là string trong JSON, không phải number | Thấp | Decode tolerant kiểu `LosslessStringConvertible` như Codex đã làm với field số |
-| Đọc Keychain item do Cursor sở hữu (không phải app tự tạo) | Cao, giống Claude Code | Chỉ đọc, không ghi/xóa/refresh token của Cursor; không log payload |
+| No public contract; endpoints can change anytime | High | Tolerant DTO decode, provider-local mapper, a failure doesn't break other providers, following the existing `ClaudeUsageMapper`/`CodexUsageMapper` pattern |
+| Two different currency units between `usage-summary` (cents) and `get-hard-limit` (dollars) | High if implemented wrong | Name fields with the unit explicit right at the mapper; never pass a raw float across the boundary unlabeled |
+| Wrong `userId` (using `authInfo.userId` instead of JWT `sub`) fails silently, returns `200` with all-zero data | High | Always decode `sub` from the JWT in the provider; never read `cli-config.json` for this |
+| JWT expires ~60 days, refresh flow unverified | Medium | v1 treats expiry as `authenticationRequired`; don't auto-refresh until the refresh flow is verified separately |
+| Token counts are strings in JSON, not numbers | Low | Tolerant decode with something like `LosslessStringConvertible`, as Codex already does for numeric fields |
+| Reading a Keychain item owned by Cursor (not created by this app) | High, same as Claude Code | Read-only; never write/delete/refresh Cursor's token; never log the payload |
 
-## Mapping đề xuất sang model chung (chưa implement)
+## Proposed mapping to the shared model (not yet implemented)
 
-Theo đúng pattern `UsageSnapshot`/`UsageMetric` đang dùng cho Claude Code và
-Codex:
+Following the same `UsageSnapshot`/`UsageMetric` pattern used for Claude
+Code and Codex:
 
 ```text
-providerID     = .cursor (cần thêm case mới vào ProviderID)
-metric cents   → auto/api/on-demand đều nên chuẩn hoá về usedValue tính theo
-                 dollar trước khi vào UsageMetric (unit: "USD"), tránh rò rỉ
-                 đơn vị cents ra UI layer
-usedPercent    = plan.autoPercentUsed / plan.apiPercentUsed / on-demand tự tính
-                 từ used/limit (không có percent field sẵn cho on-demand)
+providerID     = .cursor (needs a new case added to ProviderID)
+metric cents   → auto/api/on-demand should all be normalized to usedValue
+                 in dollars before entering UsageMetric (unit: "USD"), to
+                 avoid leaking the cents unit into the UI layer
+usedPercent    = plan.autoPercentUsed / plan.apiPercentUsed / on-demand
+                 computed from used/limit (no ready-made percent field for
+                 on-demand)
 resetsAt       = billingCycleEnd
 windowDuration = billingCycleEnd - billingCycleStart
 ```
 
-`onDemand` không có percent field có sẵn trong payload. Nếu hiển thị percent,
-phải tự tính `used/limit` và làm rõ đây là suy ra, không phải field gốc từ
-Cursor.
+`onDemand` has no ready-made percent field in the payload. If a percent is
+shown, it must be computed from `used/limit` and clearly marked as derived,
+not a raw field from Cursor.
 
-## Việc chưa làm
+## Not yet done
 
-- Chưa implement `CursorProvider` (theo `UsageProvider` protocol), chưa thêm
-  `ProviderID.cursor`, chưa có mapper, chưa có test fixture.
-- Chưa verify JWT refresh flow khi access token hết hạn.
-- Chưa xác định vì sao `get-user-hard-limit`/`get-current-usage-limit` trả
-  HTML thay vì JSON, có thể cần header hoặc method khác.
-- Chưa quyết định UX khi user không cài Cursor hoặc chưa login (tương tự
-  `configurationStatus()` của Codex/Claude).
+- `CursorProvider` (conforming to `UsageProvider`) is not implemented,
+  `ProviderID.cursor` is not added, there is no mapper, and no test
+  fixture.
+- The JWT refresh flow hasn't been verified when the access token expires.
+- It's not yet determined why `get-user-hard-limit`/`get-current-usage-limit`
+  return HTML instead of JSON; a different header or method may be needed.
+- The UX for a user who hasn't installed Cursor or isn't logged in hasn't
+  been decided yet (similar to Codex/Claude's `configurationStatus()`).
